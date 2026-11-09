@@ -13,7 +13,7 @@
   "5": {"class_type": "ConditioningZeroOut", "_meta": {"title": "Empty Negative"},
         "inputs": {"conditioning": ["4", 0]}},
   "6": {"class_type": "LoadImage", "_meta": {"title": "BL:beauty"},
-        "inputs": {"image": "cb_beauty.png"}},
+        "inputs": {"image": "lc_beauty.png"}},
   "7": {"class_type": "Canny", "_meta": {"title": "UI:Canny Edges"},
         "inputs": {"image": ["6", 0], "low_threshold": 0.2, "high_threshold": 0.6}},
   "8": {"class_type": "ControlNetLoader", "_meta": {"title": "ControlNet Canny"},
@@ -22,7 +22,7 @@
         "inputs": {"positive": ["4", 0], "negative": ["5", 0], "control_net": ["8", 0], "image": ["7", 0],
                    "vae": ["3", 0], "strength": 0.6, "start_percent": 0.0, "end_percent": 0.6}},
   "10": {"class_type": "LoadImage", "_meta": {"title": "BL:depth"},
-         "inputs": {"image": "cb_depth.png"}},
+         "inputs": {"image": "lc_depth.png"}},
   "11": {"class_type": "ControlNetLoader", "_meta": {"title": "ControlNet Depth"},
          "inputs": {"control_net_name": "flux-depth-shakker.safetensors"}},
   "12": {"class_type": "ControlNetApplyAdvanced", "_meta": {"title": "UI:Depth"},
@@ -37,5 +37,5 @@
   "15": {"class_type": "VAEDecode", "_meta": {"title": "VAE Decode"},
          "inputs": {"samples": ["14", 0], "vae": ["3", 0]}},
   "16": {"class_type": "SaveImage", "_meta": {"title": "BL:result"},
-         "inputs": {"images": ["15", 0], "filename_prefix": "comfy_bridge/flux"}}
+         "inputs": {"images": ["15", 0], "filename_prefix": "lazy_comfy/flux"}}
 }

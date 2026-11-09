@@ -1,6 +1,6 @@
 """Reads a workflow the ComfyUI frontend saved (Ctrl+S), converts it and validates it with /prompt.
 
-python tests/saved_workflow_test.py "Comfy Bridge/SDXL · Canny + Depth.json" [--run]
+python tests/saved_workflow_test.py "Lazy Comfy/SDXL · Canny + Depth.json" [--run]
 """
 
 import json
@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "comfy_bridge"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lazy_comfy"))
 import ui_convert  # noqa: E402
 
 BASE = "http://127.0.0.1:8188"

@@ -1,7 +1,7 @@
 """Builds the bundled example workflows in ComfyUI's UI format (what Ctrl+S saves).
 
-python tools/make_templates.py   (ComfyUI with comfy_bridge_nodes must be running)
-Writes comfy_bridge/workflows/templates/*.json.
+python tools/make_templates.py   (ComfyUI with lazy_comfy_nodes must be running)
+Writes lazy_comfy/workflows/templates/*.json.
 """
 
 import json
@@ -9,7 +9,7 @@ import os
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "comfy_bridge", "workflows", "templates")
+OUT = os.path.join(ROOT, "lazy_comfy", "workflows", "templates")
 OI = json.loads(urllib.request.urlopen("http://127.0.0.1:8188/object_info", timeout=60).read())
 
 GROUPS = ["Blender Inputs", "Model", "Prompts", "Control", "Sampler", "Inpaint (Redo Selection)", "Output"]
@@ -87,7 +87,7 @@ class Graph:
         ui = {"id": filename, "revision": 0, "last_node_id": max(self.nodes), "last_link_id": self.next_link - 1,
               "nodes": nodes, "links": self.links, "groups": groups, "config": {},
               "extra": {"ds": {"scale": 0.6, "offset": [40, 40]},
-                        "comfy_bridge": {"description": self.description, "packages": self.packages,
+                        "lazy_comfy": {"description": self.description, "packages": self.packages,
                                          "nodes": [c for c in used if c.startswith("Blender")] or [],
                                          "required_nodes": used}},
               "version": 0.4}
@@ -145,7 +145,7 @@ def sdxl_base(g, canny=True):
 # 1) SDXL · Canny + Depth
 g = Graph("SDXL · Canny + Depth", ["sdxl_canny_depth"], "Juggernaut XL with Canny from the beauty pass and Blender depth.")
 sdxl_base(g)
-g.add(41, "SaveImage", "Output", filename_prefix="comfy_bridge/sdxl")
+g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/sdxl")
 g.link(40, 0, 41, "images")
 g.save("SDXL · Canny + Depth.json")
 
@@ -182,7 +182,7 @@ g.link(55, 0, 56, "samples"); g.link(10, 2, 56, "vae")
 g.link(50, 1, 57, "destination"); g.link(56, 0, 57, "source"); g.link(50, 0, 57, "mask")
 g.add(60, "ComfySwitchNode", "Output", title="Redo Selection?")
 g.link(50, 2, 60, "switch"); g.link(57, 0, 60, "on_true"); g.link(40, 0, 60, "on_false")
-g.add(41, "SaveImage", "Output", filename_prefix="comfy_bridge/sdxl_objects")
+g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/sdxl_objects")
 g.link(60, 0, 41, "images")
 g.save("SDXL · Depth + Objects + Inpaint.json")
 
@@ -214,7 +214,7 @@ g.link(22, 0, 31, "model"); g.link(20, 0, 31, "positive"); g.link(20, 1, 31, "ne
 g.link(30, 0, 31, "latent_image"); g.link(32, 0, 31, "steps")
 g.add(40, "VAEDecode", "Output")
 g.link(31, 0, 40, "samples"); g.link(13, 0, 40, "vae")
-g.add(41, "SaveImage", "Output", filename_prefix="comfy_bridge/qwen")
+g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/qwen")
 g.link(40, 0, 41, "images")
 g.add(42, "PreviewImage", "Output", title="Control Preview · Depth")
 g.link(3, 0, 42, "images")

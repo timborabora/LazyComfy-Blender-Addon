@@ -1,6 +1,6 @@
-"""Headless-Test der Pass-Erzeugung ohne ComfyUI.
+"""Headless test of the pass export, without ComfyUI.
 
-blender -b examples/blockout_raum.blend --python tests/passes_test.py -- <ausgabeordner>
+blender -b examples/blockout_room.blend --python tests/passes_test.py -- <ausgabeordner>
 """
 
 import sys
@@ -9,12 +9,12 @@ import addon_utils
 import bpy
 
 out = sys.argv[sys.argv.index("--") + 1]
-mod_name = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("comfy_bridge"))
+mod_name = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod_name, default_set=True)
 passes = sys.modules[mod_name + ".passes"]
 
 scene, layer = bpy.context.scene, bpy.context.view_layer
-needed = ["beauty", "depth", "normal", "lineart", "mask:Sofa", "mask:Gibtsnicht"]
+needed = ["beauty", "depth", "normal", "lineart", "mask:Sofa", "mask:DoesNotExist"]
 saved = passes.prepare_scene(scene, layer, needed)
 bpy.ops.render.render()
 files, warnings, _ = passes.export(scene, layer, needed, out)

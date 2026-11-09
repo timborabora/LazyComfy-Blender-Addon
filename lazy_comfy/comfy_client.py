@@ -66,7 +66,7 @@ def find_server(preferred=""):
     return None, None
 
 
-def upload_image(base, path, name, subfolder="comfy_bridge"):
+def upload_image(base, path, name, subfolder="lazy_comfy"):
     """Upload an image into ComfyUI's input folder. Returns the value for LoadImage.image."""
     boundary = uuid.uuid4().hex
     with open(path, "rb") as f:

@@ -152,7 +152,7 @@ def analyze(workflow, object_info):
         "edit_prompt_nodes": [],
         "object_nodes": [],         # BlenderObjectPrompts
         "blender_selection": [],    # BlenderSelection
-        "node_based": False,        # uses Comfy Bridge nodes instead of title conventions
+        "node_based": False,        # uses Lazy Comfy nodes instead of title conventions
     }
     classes = {n["class_type"] for n in workflow.values()}
     if any(c.startswith(("QwenImage", "TextEncodeQwenImage")) for c in classes):

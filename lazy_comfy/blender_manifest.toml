@@ -1,12 +1,12 @@
 schema_version = "1.0.0"
 
-id = "comfy_bridge"
-version = "0.4.1"
-name = "Comfy Bridge"
-tagline = "Send Blender renders and render passes to ComfyUI"
+id = "lazy_comfy"
+version = "1.0.0"
+name = "Lazy Comfy"
+tagline = "ComfyUI for Blender"
 maintainer = "Tim Jagodka"
 type = "add-on"
-website = "https://github.com/timborabora/comfy_bridge"
+website = "https://github.com/timborabora/lazy_comfy"
 
 tags = ["Render"]
 

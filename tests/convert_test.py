@@ -11,13 +11,13 @@ import time
 import urllib.request
 import uuid
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "comfy_bridge"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lazy_comfy"))
 import ui_convert  # noqa: E402
 
 BASE = "http://127.0.0.1:8188"
 OI = json.loads(urllib.request.urlopen(BASE + "/object_info", timeout=60).read())
 pattern = sys.argv[1] if len(sys.argv) > 1 else ""
-folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "comfy_bridge", "workflows", "templates")
+folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lazy_comfy", "workflows", "templates")
 files = sys.argv[2:] or sorted(glob.glob(os.path.join(folder, "*.json")))
 
 for path in files:

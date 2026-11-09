@@ -1,4 +1,4 @@
-"""Comfy Bridge – Blender renders, ComfyUI computes.
+"""Lazy Comfy – Blender renders, ComfyUI computes.
 
 Blender is only the remote control: render and render passes go over HTTP to the
 local ComfyUI, the result comes back into the Image Editor.
@@ -6,10 +6,10 @@ local ComfyUI, the result comes back into the Image Editor.
 
 import bpy
 
-from . import operators, props, state, ui
+from . import migrate, operators, props, state, ui
 
 
-class CB_Preferences(bpy.types.AddonPreferences):
+class LC_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     server_url: bpy.props.StringProperty(
@@ -28,7 +28,7 @@ class CB_Preferences(bpy.types.AddonPreferences):
     )
     output_dir: bpy.props.StringProperty(
         name="Output Folder",
-        description="Empty = folder 'comfy_bridge_output' next to the .blend file (or temp if unsaved)",
+        description="Empty = folder 'lazy_comfy_output' next to the .blend file (or temp if unsaved)",
         subtype="DIR_PATH",
     )
     models_dir: bpy.props.StringProperty(
@@ -59,7 +59,20 @@ class CB_Preferences(bpy.types.AddonPreferences):
         layout.prop(self, "hf_token")
 
 
+def _migrate():
+    """Settings, object prompts and panel values from the add-on's old name (Comfy Bridge)."""
+    try:
+        copied = migrate.preferences(props._addon_prefs())
+        prompts, scenes = migrate.blend_data()
+    except Exception as e:  # never block loading over a migration
+        print("Lazy Comfy: migration skipped:", e)
+        return
+    if copied or prompts or scenes:
+        print(f"Lazy Comfy: migrated settings {copied}, {prompts} object prompt(s), {scenes} scene(s) from Comfy Bridge")
+
+
 def _auto_connect():
+    _migrate()
     props.refresh_workflow_items()
     operators.connect_async()
     return None
@@ -67,6 +80,7 @@ def _auto_connect():
 
 @bpy.app.handlers.persistent
 def _on_load(_dummy):
+    _migrate()
     # Dropdown contents don't live in the .blend, so fetch them again after opening
     props.refresh_workflow_items()
     if state.server:
@@ -77,7 +91,7 @@ def _on_load(_dummy):
 
 
 def register():
-    bpy.utils.register_class(CB_Preferences)
+    bpy.utils.register_class(LC_Preferences)
     props.register()
     operators.register()
     ui.register()
@@ -94,4 +108,4 @@ def unregister():
     ui.unregister()
     operators.unregister()
     props.unregister()
-    bpy.utils.unregister_class(CB_Preferences)
+    bpy.utils.unregister_class(LC_Preferences)

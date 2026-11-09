@@ -1,4 +1,4 @@
-"""Ship the bundled example workflows into ComfyUI's workflow folder (subfolder "Comfy Bridge").
+"""Ship the bundled example workflows into ComfyUI's workflow folder (subfolder "Lazy Comfy").
 
 Remembers the SHA256 of every copied file. A later version only replaces files whose
 content still matches what was shipped; an edited example stays and the new one is
@@ -14,7 +14,7 @@ import urllib.parse
 from . import comfy_client
 
 SRC = os.path.join(os.path.dirname(__file__), "workflows", "templates")
-DEST_DIR = "Comfy Bridge"
+DEST_DIR = "Lazy Comfy"
 
 
 def _sha(data):
@@ -61,8 +61,8 @@ def install(base, manifest_path, version=""):
             action = "installed"
         elif _sha(current) == _sha(new):
             action = "unchanged"
-        elif shipped and _sha(current) == shipped:
-            _put(base, rel, new)  # untouched since we shipped it
+        elif (shipped and _sha(current) == shipped) or current.replace(b"comfy_bridge", b"lazy_comfy") == new:
+            _put(base, rel, new)  # untouched since we shipped it (also under the add-on's old name)
             action = "updated"
         elif shipped == _sha(new):
             action = "kept yours"  # edited by the user, and we have nothing newer

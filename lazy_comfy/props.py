@@ -82,7 +82,7 @@ def _on_enum_changed(self, context):
         self.str_v = self.enum_v
 
 
-class CB_Param(bpy.types.PropertyGroup):
+class LC_Param(bpy.types.PropertyGroup):
     key: bpy.props.StringProperty()
     node_id: bpy.props.StringProperty()
     node_class: bpy.props.StringProperty()
@@ -138,7 +138,7 @@ class CB_Param(bpy.types.PropertyGroup):
                     pass
 
 
-class CB_Settings(bpy.types.PropertyGroup):
+class LC_Settings(bpy.types.PropertyGroup):
     workflow: bpy.props.EnumProperty(
         name="Workflow",
         description="ComfyUI workflow (API format) that runs with your render",
@@ -154,7 +154,7 @@ class CB_Settings(bpy.types.PropertyGroup):
     missing_packages: bpy.props.StringProperty()
     missing_nodes: bpy.props.StringProperty()
     workflow_can_edit: bpy.props.BoolProperty()
-    params: bpy.props.CollectionProperty(type=CB_Param)
+    params: bpy.props.CollectionProperty(type=LC_Param)
     saved_values: bpy.props.StringProperty(default="{}")
 
     show_all_models: bpy.props.BoolProperty(
@@ -176,7 +176,7 @@ class CB_Settings(bpy.types.PropertyGroup):
     )
     load_control_images: bpy.props.BoolProperty(
         name="Load Control Images",
-        description="Load the generated passes as images 'CB · …' to check them in the Image Editor",
+        description="Load the generated passes as images 'LC · …' to check them in the Image Editor",
         default=True,
     )
     show_result: bpy.props.BoolProperty(
@@ -230,21 +230,21 @@ class CB_Settings(bpy.types.PropertyGroup):
             return {}
 
 
-classes = (CB_Param, CB_Settings)
+classes = (LC_Param, LC_Settings)
 
 
 def register():
     for c in classes:
         bpy.utils.register_class(c)
-    bpy.types.Scene.comfy_bridge = bpy.props.PointerProperty(type=CB_Settings)
-    bpy.types.Object.comfy_prompt = bpy.props.StringProperty(
+    bpy.types.Scene.lazy_comfy = bpy.props.PointerProperty(type=LC_Settings)
+    bpy.types.Object.lazy_comfy_prompt = bpy.props.StringProperty(
         name="Object Prompt",
         description="Prompt for this object only. Used by workflows with object prompt slots (BL:region_1 …)",
     )
 
 
 def unregister():
-    del bpy.types.Object.comfy_prompt
-    del bpy.types.Scene.comfy_bridge
+    del bpy.types.Object.lazy_comfy_prompt
+    del bpy.types.Scene.lazy_comfy
     for c in reversed(classes):
         bpy.utils.unregister_class(c)

@@ -1323,7 +1323,7 @@
     "Node name for S&R": "SaveImage"
    },
    "widgets_values": [
-    "comfy_bridge/sdxl"
+    "lazy_comfy/sdxl"
    ]
   }
  ],
@@ -1642,7 +1642,7 @@
     40
    ]
   },
-  "comfy_bridge": {
+  "lazy_comfy": {
    "description": "Juggernaut XL with Canny from the beauty pass and Blender depth.",
    "packages": [
     "sdxl_canny_depth"

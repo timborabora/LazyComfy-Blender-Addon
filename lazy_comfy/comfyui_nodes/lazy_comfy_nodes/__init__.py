@@ -1,7 +1,7 @@
-"""Comfy Bridge nodes: the inputs a workflow gets from Blender.
+"""Lazy Comfy nodes: the inputs a workflow gets from Blender.
 
 Every node has a built-in placeholder (the blockout room), so a workflow also runs
-on its own in ComfyUI. The Comfy Bridge Blender add-on fills the inputs when it
+on its own in ComfyUI. The Lazy Comfy Blender add-on fills the inputs when it
 sends a render: file names of uploaded passes and masks, prompts, settings.
 """
 

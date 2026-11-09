@@ -52,7 +52,7 @@
    "title": "BL:result_prev"
   },
   "inputs": {
-   "image": "cb_result_prev.png"
+   "image": "lc_result_prev.png"
   }
  },
  "6": {
@@ -61,7 +61,7 @@
    "title": "BL:mask_selection"
   },
   "inputs": {
-   "image": "cb_selection.png",
+   "image": "lc_selection.png",
    "channel": "red"
   }
  },
@@ -71,7 +71,7 @@
    "title": "BL:depth"
   },
   "inputs": {
-   "image": "cb_depth.png"
+   "image": "lc_depth.png"
   }
  },
  "8": {
@@ -218,7 +218,7 @@
     "13",
     0
    ],
-   "filename_prefix": "comfy_bridge/sdxl_edit"
+   "filename_prefix": "lazy_comfy/sdxl_edit"
   }
  }
 }

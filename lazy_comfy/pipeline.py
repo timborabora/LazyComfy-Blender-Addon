@@ -31,11 +31,11 @@ class Job:
         self.cancelled = False
         self.error = ""
         self.prompt_id = ""
-        self.results = []               # [(titel, lokaler pfad)]
+        self.results = []               # [(title, local path)]
         self.thread = None
 
     def start(self):
-        self.thread = threading.Thread(target=self.run, name="ComfyBridgeJob", daemon=True)
+        self.thread = threading.Thread(target=self.run, name="LazyComfyJob", daemon=True)
         self.thread.start()
 
     def cancel(self):

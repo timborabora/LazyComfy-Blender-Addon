@@ -41,8 +41,9 @@ def comfy_desktop_models_dir():
     return dirs[0] if dirs and os.path.isdir(dirs[0]) else ""
 
 
-NODES_SRC = os.path.join(os.path.dirname(__file__), "comfyui_nodes", "comfy_bridge_nodes")
-NODES_NAME = "comfy_bridge_nodes"
+NODES_SRC = os.path.join(os.path.dirname(__file__), "comfyui_nodes", "lazy_comfy_nodes")
+NODES_NAME = "lazy_comfy_nodes"
+OLD_NODES_NAME = "comfy_bridge_nodes"  # the pack's name before the add-on was renamed
 
 
 def comfy_desktop_comfyui_dir():
@@ -78,7 +79,8 @@ def nodes_status(comfyui_dir, object_info):
     """'loaded' | 'restart' (copied, ComfyUI not restarted) | 'outdated' | 'missing'."""
     target = os.path.join(comfyui_dir, "custom_nodes", NODES_NAME) if comfyui_dir else ""
     copied = bool(target) and os.path.isdir(target)
-    if copied and _read_version(target) != _read_version(NODES_SRC):
+    old = os.path.join(comfyui_dir, "custom_nodes", OLD_NODES_NAME) if comfyui_dir else ""
+    if (copied and _read_version(target) != _read_version(NODES_SRC)) or (old and os.path.isdir(old)):
         return "outdated"
     if "BlenderPass" in object_info:
         return "loaded"
@@ -91,6 +93,9 @@ def install_nodes(comfyui_dir):
         raise InstallError("ComfyUI folder not found. Set it in the add-on preferences.")
     target = os.path.join(comfyui_dir, "custom_nodes", NODES_NAME)
     shutil.copytree(NODES_SRC, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    old = os.path.join(comfyui_dir, "custom_nodes", OLD_NODES_NAME)
+    if os.path.isdir(old):
+        shutil.rmtree(old)  # same node classes under the old name – both together would clash
     return target
 
 
@@ -158,7 +163,7 @@ class Download:
         return self.done_bytes / self.total if self.total else 1.0
 
     def start(self):
-        self.thread = threading.Thread(target=self.run, name="ComfyBridgeDownload", daemon=True)
+        self.thread = threading.Thread(target=self.run, name="LazyComfyDownload", daemon=True)
         self.thread.start()
 
     def cancel(self):
@@ -194,7 +199,7 @@ class Download:
         self.done_bytes += have
 
         if have < entry["size"]:
-            headers = {"User-Agent": "ComfyBridge-Blender"}
+            headers = {"User-Agent": "LazyComfy-Blender"}
             if have:
                 headers["Range"] = f"bytes={have}-"
             if self.hf_token and entry["url"].startswith("https://huggingface.co/"):

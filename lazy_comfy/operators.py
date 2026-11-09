@@ -8,7 +8,7 @@ import time
 
 import bpy
 
-from . import comfy_client, installer, passes, pipeline, props, state, templates, workflows
+from . import comfy_client, installer, migrate, passes, pipeline, props, state, templates, workflows
 from .comfy_client import ComfyError
 
 
@@ -23,7 +23,7 @@ def _addon_version():
 
 ADDON_VERSION = _addon_version()
 
-HISTORY_TEXT = "ComfyBridge_History"
+HISTORY_TEXT = "LazyComfy_History"
 RESULT_IMAGE = "ComfyUI Result"
 PASS_IMAGE_LABELS = {"beauty": "Beauty", "depth": "Depth", "normal": "Normal", "lineart": "Line Art"}
 
@@ -50,10 +50,11 @@ def connect_async():
     state.connect_error = ""
     preferred = prefs().server_url if prefs() else ""
     manifest = examples_manifest_path()
+    old_manifests = migrate.old_manifest_paths()
 
     def work():
         try:
-            _connect(preferred, manifest)
+            _connect(preferred, manifest, old_manifests)
         except Exception as e:
             state.server, state.stats = None, None
             state.connect_error = str(e)
@@ -76,18 +77,21 @@ def connect_async():
 
 def connect_sync(preferred=""):
     """For scripts and tests."""
-    _connect(preferred, examples_manifest_path())
+    _connect(preferred, examples_manifest_path(), migrate.old_manifest_paths())
     props.refresh_workflow_items()
     return state.server
 
 
-def _connect(preferred, manifest):
+def _connect(preferred, manifest, old_manifests=()):
     """Find ComfyUI, read its nodes, ship the examples once, list saved workflows. Runs off the main thread."""
     base, stats = comfy_client.find_server(preferred)
     if not base:
         raise ComfyError("ComfyUI not found. Is Comfy Desktop running?")
     info = comfy_client.get_json(base, "/object_info", timeout=30)
     state.server, state.stats, state.object_info = base, stats, info
+    moved = migrate.comfy_examples(base, manifest, old_manifests, comfy_client)
+    if moved:
+        state.examples_message = f"Moved {len(moved)} workflow(s) from 'Comfy Bridge' to 'Lazy Comfy'."
     if manifest and templates.load_manifest(manifest).get("__version__") != ADDON_VERSION:
         try:
             report = templates.install(base, manifest, ADDON_VERSION)
@@ -119,7 +123,7 @@ def examples_manifest_path():
     try:
         folder = bpy.utils.extension_path_user(__package__, create=True)
     except (ValueError, AttributeError):
-        folder = os.path.join(tempfile.gettempdir(), "comfy_bridge")
+        folder = os.path.join(tempfile.gettempdir(), "lazy_comfy")
     return os.path.join(folder, "examples_manifest.json")
 
 
@@ -131,7 +135,7 @@ def _current_values(settings):
 
 def rebuild_params(scene, save_old=True, from_user=False):
     """Re-read the selected workflow and rebuild the panel fields."""
-    s = scene.comfy_bridge
+    s = scene.lazy_comfy
     # Blender stores dynamic enums as an index – it shifts when workflows are added.
     if (not from_user and s.workflow_path and s.workflow != s.workflow_path
             and any(i[0] == s.workflow_path for i in state.workflow_items)):
@@ -194,7 +198,8 @@ def _set_dependencies(s, path, api):
     packages, nodes = [], []
     if path.startswith(workflows.COMFY_PREFIX):
         ui = state.comfy_workflows.get(path, {}).get("ui") or {}
-        meta = (ui.get("extra") or {}).get("comfy_bridge") or {}
+        extra = ui.get("extra") or {}
+        meta = extra.get("lazy_comfy") or extra.get("comfy_bridge") or {}  # older examples used the old name
         packages = meta.get("packages", [])
         nodes = meta.get("required_nodes") or sorted({n.get("type") for n in ui.get("nodes", [])
                                                       if n.get("type") not in ("Reroute", "PrimitiveNode", "Note", "MarkdownNote")})
@@ -215,12 +220,12 @@ def _output_dir():
     if p and p.output_dir:
         return bpy.path.abspath(p.output_dir)
     if bpy.data.filepath:
-        return os.path.join(os.path.dirname(bpy.data.filepath), "comfy_bridge_output")
-    return os.path.join(tempfile.gettempdir(), "comfy_bridge", "output")
+        return os.path.join(os.path.dirname(bpy.data.filepath), "lazy_comfy_output")
+    return os.path.join(tempfile.gettempdir(), "lazy_comfy", "output")
 
 
 def _pass_dir():
-    return os.path.join(tempfile.gettempdir(), "comfy_bridge", "passes")
+    return os.path.join(tempfile.gettempdir(), "lazy_comfy", "passes")
 
 
 def _wanted_passes(s, needed):
@@ -236,7 +241,7 @@ def _wanted_passes(s, needed):
 
 def prompt_objects(scene, view_layer):
     """Objects with an object prompt that the render can see, in a stable order."""
-    objs = [o for o in scene.objects if o.comfy_prompt.strip() and o.visible_get(view_layer=view_layer)]
+    objs = [o for o in scene.objects if o.lazy_comfy_prompt.strip() and o.visible_get(view_layer=view_layer)]
     return sorted(objs, key=lambda o: o.name)
 
 
@@ -246,7 +251,7 @@ def selected_objects(scene, view_layer):
 
 def workflow_needs(scene, view_layer, mode):
     """Workflow, its analysis and the passes to render for `mode` ('main' or 'edit')."""
-    s = scene.comfy_bridge
+    s = scene.lazy_comfy
     path = s.workflow
     if mode == "edit" and not s.workflow_can_edit:
         path = s.edit_workflow  # title-convention edit workflow (API file)
@@ -272,7 +277,7 @@ def _image_size(path):
 
 def build_job(scene, view_layer, mode="main"):
     """Export the passes and prepare the workflow. Returns (job, control images, warnings, info)."""
-    s = scene.comfy_bridge
+    s = scene.lazy_comfy
     if not state.server:
         raise ComfyError("Not connected to ComfyUI.")
     path, wf, analysis, wanted = workflow_needs(scene, view_layer, mode)
@@ -349,11 +354,11 @@ def build_job(scene, view_layer, mode="main"):
         if obj is not None and not active:
             warnings.append(f"'{obj.name}' is not in the frame – its object prompt is skipped.")
         mask_file = files.get(key) or _blank_mask(width, height)
-        uploads.append((mask_file, f"cb_{key}.png", [slot["mask"]]))
-        wf[slot["prompt"]]["inputs"]["text"] = obj.comfy_prompt if active else ""
+        uploads.append((mask_file, f"lc_{key}.png", [slot["mask"]]))
+        wf[slot["prompt"]]["inputs"]["text"] = obj.lazy_comfy_prompt if active else ""
         wf[slot["apply"]]["inputs"]["strength"] = s.region_strength if active else 0.0
         if active:
-            used.append(f"{obj.name}: {obj.comfy_prompt}")
+            used.append(f"{obj.name}: {obj.lazy_comfy_prompt}")
 
     # Blender Object Prompts node: one entry per visible object, masks uploaded alongside.
     entries = []
@@ -362,10 +367,10 @@ def build_job(scene, view_layer, mode="main"):
         if not visible.get(key):
             warnings.append(f"'{obj.name}' is not in the frame – its object prompt is skipped.")
             continue
-        name = f"cb_{key}.png"
+        name = f"lc_{key}.png"
         uploads.append((files[key], name, []))
-        entries.append({"name": obj.name, "prompt": obj.comfy_prompt, "mask": f"comfy_bridge/{name}"})
-        used.append(f"{obj.name}: {obj.comfy_prompt}")
+        entries.append({"name": obj.name, "prompt": obj.lazy_comfy_prompt, "mask": f"lazy_comfy/{name}"})
+        used.append(f"{obj.name}: {obj.lazy_comfy_prompt}")
     for nid in analysis["object_nodes"]:
         wf[nid]["inputs"]["objects"] = json.dumps(entries)
 
@@ -378,11 +383,11 @@ def build_job(scene, view_layer, mode="main"):
         if not visible.get("selection"):
             raise passes.PassError("The selected objects are not in the frame.")
         if analysis["prev_nodes"] or analysis["selection_nodes"]:
-            uploads.append((prev, "cb_result_prev.png", analysis["prev_nodes"]))
-            uploads.append((files["selection"], "cb_selection.png", analysis["selection_nodes"]))
+            uploads.append((prev, "lc_result_prev.png", analysis["prev_nodes"]))
+            uploads.append((files["selection"], "lc_selection.png", analysis["selection_nodes"]))
         if analysis["blender_selection"]:
-            uploads.append((prev, "cb_result_prev.png", analysis["blender_selection"], "previous"))
-            uploads.append((files["selection"], "cb_selection.png", analysis["blender_selection"], "mask"))
+            uploads.append((prev, "lc_result_prev.png", analysis["blender_selection"], "previous"))
+            uploads.append((files["selection"], "lc_selection.png", analysis["blender_selection"], "mask"))
 
     s.last_seed = seed
     job = pipeline.Job(state.server, wf, state.client_id, uploads, _output_dir(), analysis["result_nodes"])
@@ -401,7 +406,7 @@ def build_job(scene, view_layer, mode="main"):
 
 
 def _blank_mask(width, height):
-    path = os.path.join(_pass_dir(), f"cb_blank_{width}x{height}.png")
+    path = os.path.join(_pass_dir(), f"lc_blank_{width}x{height}.png")
     if not os.path.exists(path):
         os.makedirs(_pass_dir(), exist_ok=True)
         passes.write_png(path, passes.np.zeros((height, width), dtype=passes.np.float32))
@@ -435,7 +440,7 @@ def _fail(s, message):
 
 
 def finish_job(scene, job, info):
-    s = scene.comfy_bridge
+    s = scene.lazy_comfy
     s.running = False
     s.progress = job.progress
     if job.error:
@@ -461,10 +466,10 @@ def finish_job(scene, job, info):
 
 
 def start_job(scene, job, files, warnings, info):
-    s = scene.comfy_bridge
+    s = scene.lazy_comfy
     if s.load_control_images:
         for key, path in files.items():
-            load_image("CB · " + PASS_IMAGE_LABELS.get(key, "Mask " + key[5:]), path)
+            load_image("LC · " + PASS_IMAGE_LABELS.get(key, "Mask " + key[5:]), path)
     s.running, s.progress, s.last_error = True, 0.0, "\n".join(warnings)
     s.status = "Sending to ComfyUI …"
     state.job = job
@@ -475,7 +480,7 @@ def start_job(scene, job, files, warnings, info):
         scene = bpy.data.scenes.get(scene_name)
         if scene is None:
             return None
-        sc = scene.comfy_bridge
+        sc = scene.lazy_comfy
         sc.progress = job.progress
         sc.status = job.status
         tag_redraw()
@@ -499,8 +504,8 @@ def run_blocking(scene, view_layer, mode="main"):
 
 # ---------------------------------------------------------------- operators
 
-class CB_OT_connect(bpy.types.Operator):
-    bl_idname = "comfy_bridge.connect"
+class LC_OT_connect(bpy.types.Operator):
+    bl_idname = "lazy_comfy.connect"
     bl_label = "Connect"
     bl_description = "Find ComfyUI and reload its models and nodes"
 
@@ -510,8 +515,8 @@ class CB_OT_connect(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_reload_workflows(bpy.types.Operator):
-    bl_idname = "comfy_bridge.reload_workflows"
+class LC_OT_reload_workflows(bpy.types.Operator):
+    bl_idname = "lazy_comfy.reload_workflows"
     bl_label = "Reload Workflows"
     bl_description = "Rescan the workflow folders and re-read the selected workflow"
 
@@ -521,8 +526,8 @@ class CB_OT_reload_workflows(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_open_folder(bpy.types.Operator):
-    bl_idname = "comfy_bridge.open_folder"
+class LC_OT_open_folder(bpy.types.Operator):
+    bl_idname = "lazy_comfy.open_folder"
     bl_label = "Open Folder"
     bl_description = "Open the folder in the file browser"
     which: bpy.props.EnumProperty(items=[("WORKFLOWS", "Workflows", ""), ("OUTPUT", "Results", "")])
@@ -546,14 +551,14 @@ class CB_OT_open_folder(bpy.types.Operator):
 class _SendBase:
     @classmethod
     def poll(cls, context):
-        s = context.scene.comfy_bridge
+        s = context.scene.lazy_comfy
         return state.server and s.workflow and not s.running
 
     def _send(self, context):
         try:
             job, files, warnings, info = build_job(context.scene, context.view_layer)
         except (ComfyError, passes.PassError, workflows.WorkflowError) as e:
-            _fail(context.scene.comfy_bridge, str(e))
+            _fail(context.scene.lazy_comfy, str(e))
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         start_job(context.scene, job, files, warnings, info)
@@ -562,8 +567,8 @@ class _SendBase:
         return {"FINISHED"}
 
 
-class CB_OT_render_send(_SendBase, bpy.types.Operator):
-    bl_idname = "comfy_bridge.render_send"
+class LC_OT_render_send(_SendBase, bpy.types.Operator):
+    bl_idname = "lazy_comfy.render_send"
     bl_label = "Render & Generate"
     bl_description = (
         "Render the scene with the passes the workflow needs, "
@@ -576,7 +581,7 @@ class CB_OT_render_send(_SendBase, bpy.types.Operator):
 
 def render_then_send(op, context, mode):
     """Render with the passes the workflow needs, then build and start the job."""
-    s = context.scene.comfy_bridge
+    s = context.scene.lazy_comfy
     try:
         _, _, _, wanted = workflow_needs(context.scene, context.view_layer, mode)
     except workflows.WorkflowError as e:
@@ -626,9 +631,9 @@ def render_then_send(op, context, mode):
                 job, files, warnings, info = build_job(scene, layer, mode)
                 start_job(scene, job, files, warnings, info)
             except Exception as e:
-                _fail(scene.comfy_bridge, str(e))
+                _fail(scene.lazy_comfy, str(e))
         elif scene:
-            scene.comfy_bridge.status = "Render cancelled"
+            scene.lazy_comfy.status = "Render cancelled"
         passes.restore_scene(saved)
         tag_redraw()
         return None
@@ -638,8 +643,8 @@ def render_then_send(op, context, mode):
     return {"FINISHED"}
 
 
-class CB_OT_edit_selection(bpy.types.Operator):
-    bl_idname = "comfy_bridge.edit_selection"
+class LC_OT_edit_selection(bpy.types.Operator):
+    bl_idname = "lazy_comfy.edit_selection"
     bl_label = "Redo Selection"
     bl_description = (
         "Repaint only the selected objects in the last result: same seed, new prompt, "
@@ -648,15 +653,15 @@ class CB_OT_edit_selection(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        s = context.scene.comfy_bridge
+        s = context.scene.lazy_comfy
         return state.server and (s.workflow_can_edit or s.edit_workflow) and s.last_result and not s.running
 
     def execute(self, context):
         return render_then_send(self, context, "edit")
 
 
-class CB_OT_send(_SendBase, bpy.types.Operator):
-    bl_idname = "comfy_bridge.send"
+class LC_OT_send(_SendBase, bpy.types.Operator):
+    bl_idname = "lazy_comfy.send"
     bl_label = "Send Last Render"
     bl_description = "Send the existing render without re-rendering. Missing passes need a new render"
 
@@ -664,8 +669,8 @@ class CB_OT_send(_SendBase, bpy.types.Operator):
         return self._send(context)
 
 
-class CB_OT_cancel(bpy.types.Operator):
-    bl_idname = "comfy_bridge.cancel"
+class LC_OT_cancel(bpy.types.Operator):
+    bl_idname = "lazy_comfy.cancel"
     bl_label = "Cancel"
     bl_description = "Stop the running job in ComfyUI"
 
@@ -675,14 +680,14 @@ class CB_OT_cancel(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_edit_prompt(bpy.types.Operator):
-    bl_idname = "comfy_bridge.edit_prompt"
+class LC_OT_edit_prompt(bpy.types.Operator):
+    bl_idname = "lazy_comfy.edit_prompt"
     bl_label = "Edit Prompt"
     bl_description = "Edit the prompt in a large window"
     key: bpy.props.StringProperty(options={"HIDDEN"})
 
     def _param(self, context):
-        return next((p for p in context.scene.comfy_bridge.params if p.key == self.key), None)
+        return next((p for p in context.scene.lazy_comfy.params if p.key == self.key), None)
 
     def invoke(self, context, event):
         if self._param(context) is None:
@@ -702,8 +707,8 @@ class CB_OT_edit_prompt(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_show_text(bpy.types.Operator):
-    bl_idname = "comfy_bridge.show_error"
+class LC_OT_show_text(bpy.types.Operator):
+    bl_idname = "lazy_comfy.show_error"
     bl_label = "Show Message"
     bl_description = "Show the full message"
 
@@ -711,7 +716,7 @@ class CB_OT_show_text(bpy.types.Operator):
         return context.window_manager.invoke_popup(self, width=520)
 
     def draw(self, context):
-        for line in context.scene.comfy_bridge.last_error.splitlines():
+        for line in context.scene.lazy_comfy.last_error.splitlines():
             self.layout.label(text=line)
 
     def execute(self, context):
@@ -731,7 +736,7 @@ def _select_workflow(scene, filename):
     props.refresh_workflow_items()
     for path, _, _ in state.workflow_items:
         if os.path.basename(path) == filename:
-            scene.comfy_bridge.workflow = path
+            scene.lazy_comfy.workflow = path
             return True
     return False
 
@@ -750,8 +755,8 @@ def _draw_package_facts(layout, pkg, root):
         col.label(text="Missing ComfyUI nodes: " + ", ".join(missing), icon="ERROR")
 
 
-class CB_OT_install_package(bpy.types.Operator):
-    bl_idname = "comfy_bridge.install_package"
+class LC_OT_install_package(bpy.types.Operator):
+    bl_idname = "lazy_comfy.install_package"
     bl_label = "Install Package"
     bl_description = "Download the package's model files into ComfyUI's models folder and select its workflow"
     package_id: bpy.props.StringProperty(options={"HIDDEN"})
@@ -761,7 +766,7 @@ class CB_OT_install_package(bpy.types.Operator):
         return state.download is None
 
     def _pkg(self, context):
-        return installer.package(self.package_id or context.scene.comfy_bridge.package)
+        return installer.package(self.package_id or context.scene.lazy_comfy.package)
 
     def invoke(self, context, event):
         if not models_dir():
@@ -813,8 +818,8 @@ class CB_OT_install_package(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_cancel_download(bpy.types.Operator):
-    bl_idname = "comfy_bridge.cancel_download"
+class LC_OT_cancel_download(bpy.types.Operator):
+    bl_idname = "lazy_comfy.cancel_download"
     bl_label = "Cancel Download"
     bl_description = "Stop the download. It resumes later where it stopped"
 
@@ -824,8 +829,8 @@ class CB_OT_cancel_download(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_delete_package(bpy.types.Operator):
-    bl_idname = "comfy_bridge.delete_package"
+class LC_OT_delete_package(bpy.types.Operator):
+    bl_idname = "lazy_comfy.delete_package"
     bl_label = "Delete Package Files"
     bl_description = "Permanently delete this package's model files (files used by another installed package stay)"
 
@@ -837,7 +842,7 @@ class CB_OT_delete_package(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Delete")
 
     def draw(self, context):
-        pkg = installer.package(context.scene.comfy_bridge.package)
+        pkg = installer.package(context.scene.lazy_comfy.package)
         files = installer.removable_files(models_dir(), pkg)
         self.layout.label(text=f"Permanently delete {len(files)} file(s)? This can't be undone.", icon="ERROR")
         col = self.layout.column(align=True)
@@ -845,7 +850,7 @@ class CB_OT_delete_package(bpy.types.Operator):
             col.label(text=os.path.basename(f))
 
     def execute(self, context):
-        pkg = installer.package(context.scene.comfy_bridge.package)
+        pkg = installer.package(context.scene.lazy_comfy.package)
         files = installer.removable_files(models_dir(), pkg)
         for f in files:
             os.remove(f)
@@ -861,10 +866,10 @@ def comfyui_dir():
     return installer.comfy_desktop_comfyui_dir()
 
 
-class CB_OT_install_nodes(bpy.types.Operator):
-    bl_idname = "comfy_bridge.install_nodes"
+class LC_OT_install_nodes(bpy.types.Operator):
+    bl_idname = "lazy_comfy.install_nodes"
     bl_label = "Install Blender Nodes"
-    bl_description = "Copy the Comfy Bridge nodes into ComfyUI's custom_nodes folder. Restart ComfyUI afterwards"
+    bl_description = "Copy the Lazy Comfy nodes into ComfyUI's custom_nodes folder. Restart ComfyUI afterwards"
 
     def execute(self, context):
         try:
@@ -877,10 +882,10 @@ class CB_OT_install_nodes(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CB_OT_install_examples(bpy.types.Operator):
-    bl_idname = "comfy_bridge.install_examples"
+class LC_OT_install_examples(bpy.types.Operator):
+    bl_idname = "lazy_comfy.install_examples"
     bl_label = "Install Examples"
-    bl_description = ("Copy the example workflows into ComfyUI (Workflows › Comfy Bridge). "
+    bl_description = ("Copy the example workflows into ComfyUI (Workflows › Lazy Comfy). "
                       "Edited examples stay – save your changes with 'Save As' to keep them apart")
 
     @classmethod
@@ -902,20 +907,20 @@ class CB_OT_install_examples(bpy.types.Operator):
 
 
 classes = (
-    CB_OT_install_nodes,
-    CB_OT_install_examples,
-    CB_OT_install_package,
-    CB_OT_cancel_download,
-    CB_OT_delete_package,
-    CB_OT_connect,
-    CB_OT_reload_workflows,
-    CB_OT_open_folder,
-    CB_OT_render_send,
-    CB_OT_edit_selection,
-    CB_OT_send,
-    CB_OT_cancel,
-    CB_OT_edit_prompt,
-    CB_OT_show_text,
+    LC_OT_install_nodes,
+    LC_OT_install_examples,
+    LC_OT_install_package,
+    LC_OT_cancel_download,
+    LC_OT_delete_package,
+    LC_OT_connect,
+    LC_OT_reload_workflows,
+    LC_OT_open_folder,
+    LC_OT_render_send,
+    LC_OT_edit_selection,
+    LC_OT_send,
+    LC_OT_cancel,
+    LC_OT_edit_prompt,
+    LC_OT_show_text,
 )
 
 

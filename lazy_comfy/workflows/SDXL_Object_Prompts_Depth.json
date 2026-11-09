@@ -40,7 +40,7 @@
    "title": "BL:beauty"
   },
   "inputs": {
-   "image": "cb_beauty.png"
+   "image": "lc_beauty.png"
   }
  },
  "5": {
@@ -99,7 +99,7 @@
    "title": "BL:depth"
   },
   "inputs": {
-   "image": "cb_depth.png"
+   "image": "lc_depth.png"
   }
  },
  "9": {
@@ -205,7 +205,7 @@
     "13",
     0
    ],
-   "filename_prefix": "comfy_bridge/sdxl_objects"
+   "filename_prefix": "lazy_comfy/sdxl_objects"
   }
  },
  "21": {
@@ -214,7 +214,7 @@
    "title": "BL:region_1_mask"
   },
   "inputs": {
-   "image": "cb_region.png",
+   "image": "lc_region.png",
    "channel": "red"
   }
  },
@@ -224,7 +224,7 @@
    "title": "BL:region_2_mask"
   },
   "inputs": {
-   "image": "cb_region.png",
+   "image": "lc_region.png",
    "channel": "red"
   }
  },
@@ -234,7 +234,7 @@
    "title": "BL:region_3_mask"
   },
   "inputs": {
-   "image": "cb_region.png",
+   "image": "lc_region.png",
    "channel": "red"
   }
  },
@@ -244,7 +244,7 @@
    "title": "BL:region_4_mask"
   },
   "inputs": {
-   "image": "cb_region.png",
+   "image": "lc_region.png",
    "channel": "red"
   }
  },

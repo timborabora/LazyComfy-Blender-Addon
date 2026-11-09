@@ -1,128 +1,123 @@
-# Comfy Bridge
+# Lazy Comfy – ComfyUI for Blender
 
-Blender-Add-on (ab 5.0): Blender rendert, ComfyUI rechnet. Render und Render-Pässe gehen mit einem Klick an das lokale ComfyUI, das Ergebnis landet im Image Editor.
+Blender add-on (5.0+): Blender renders, ComfyUI generates. One click sends your render and its passes (depth, line art, normals, object masks) to a local ComfyUI; the result comes back into the Image Editor.
 
-Das Panel sitzt unter **Render Properties → Comfy Bridge** und ist auf Englisch:
+The add-on only does what Blender knows – objects, masks, camera, passes. All image work (models, ControlNets, samplers, LoRAs, upscalers) stays in the ComfyUI workflow.
 
-- im Kopf ein grüner bzw. roter Punkt für die Verbindung und ↻
-- Workflow (darunter nur ein Hinweis, wenn etwas fehlt), Prompt (✎ öffnet ein großes Eingabefenster), Negativ-Prompt eingeklappt, die Regler des Workflows
-- **Render & Generate** mit Würfel: an = jeder Render bekommt einen neuen Seed
-- nach dem ersten Ergebnis: Feld „Change“ mit **Redo Selection** und die Statuszeile mit Ordner-Knopf
-- einklappbar: **Object Prompts** (wenn der Workflow sie kann) und **Advanced** mit Models, Render & Seed (auch **Send Last Render**), Redo Selection, Model Packages und ComfyUI (Nodes, Beispiele)
+## Install
 
-Die alten API-Dateien erscheinen nur, wenn „Show API Files“ in den Add-on-Einstellungen an ist.
+Download `lazy_comfy-<version>.zip` from the [latest release](https://github.com/timborabora/lazy_comfy/releases/latest) (not "Code › Download ZIP") and drop it onto Blender, or use Preferences › Get Extensions › Install from Disk.
 
-In Blender passiert nur, was Blender weiß: Objekte, Masken, Kamera, Pässe. Die Bildarbeit (Modelle, ControlNets, Sampler, LoRAs, Upscaler) bleibt im ComfyUI-Workflow.
+For automatic updates add the repository once: Preferences › Get Extensions › Repositories › **+** › Add Remote Repository:
 
-## Ablauf
+```
+https://github.com/timborabora/lazy_comfy/releases/latest/download/index.json
+```
 
-1. Comfy Desktop starten. Das Add-on findet den Server selbst (8188, 8000, …). Mit ↻ wird neu gesucht.
-2. Workflow wählen. Das Panel zeigt Prompt, die Regler des Workflows und was fehlt (Modell-Paket mit **Install**-Knopf, fehlende Nodes).
-3. **Render & Generate**. Blender rendert mit den nötigen Pässen, lädt sie hoch und zeigt den Fortschritt. Das Ergebnis heißt im Image Editor `ComfyUI Result`.
+Tick "Check for Updates on Startup". Blender then offers new versions by itself.
 
-**Send Last Render** nimmt den vorhandenen Render. Fehlen Pässe (z. B. Depth), braucht es einen neuen Render.
+Then, in the panel under Advanced › ComfyUI, click **Install** next to "Blender nodes" and restart ComfyUI once.
 
-Jeder Lauf landet als Zeile im Textblock `ComfyBridge_History` (Seed, Workflow, alle Werte). ComfyUI schreibt zusätzlich den kompletten Workflow in die PNG.
+## The panel
 
-## Workflows in ComfyUI (Blender-Nodes)
+Render Properties › **Lazy Comfy**:
 
-ComfyUI ist die Werkstatt: Workflows dort anpassen und ganz normal mit **Strg+S** speichern. Ein API-Export ist nicht nötig. Das Dropdown in Blender zeigt alle in ComfyUI gespeicherten Workflows, die mindestens einen Blender-Node enthalten. Das Add-on wandelt sie selbst ins API-Format um.
+- header: green/red dot for the ComfyUI connection, ↻ to reconnect
+- workflow menu – below it only what is missing (model package with an **Install** button, missing nodes)
+- prompt (✎ opens a large editor), negative prompt folded away, then the workflow's own controls
+- **Render & Generate**, with a dice toggle: on = a new seed for every render
+- after the first result: a **Change** field with **Redo Selection**, and the status line with a folder button
+- **Object Prompts** (when the workflow supports them) and **Advanced** (models, render & seed incl. Send Last Render, Redo Selection, model packages, ComfyUI nodes and examples)
 
-Die Nodes kommen aus dem Paket `comfy_bridge_nodes`, das mit dem Add-on ausgeliefert wird (Advanced › **Install Blender Nodes**, danach ComfyUI neu starten). Kategorie „Comfy Bridge“:
+Objects get their own prompt under Object Properties › Lazy Comfy.
 
-| Node | Ausgang | Wofür |
+Every run is logged in the text block `LazyComfy_History` (seed, workflow, all values). ComfyUI also embeds the full workflow in the PNG.
+
+## Where results go
+
+- Saved by the add-on: `lazy_comfy_output` next to the .blend (temp folder if the file is unsaved, or the Output Folder from the preferences).
+- ComfyUI's own copy: its output folder, subfolder `lazy_comfy`.
+- The control images of the last run: `%TEMP%\lazy_comfy\passes`, and in Blender as images `LC · Depth` etc.
+
+## Workflows
+
+ComfyUI is the workshop: build or change a workflow there and save it normally with **Ctrl+S** – no API export. The Blender menu lists every saved workflow that contains at least one Blender node and converts it itself.
+
+Nodes (category "Lazy Comfy", pack `lazy_comfy_nodes`, ships with the add-on):
+
+| Node | Output | Purpose |
 |---|---|---|
 | Blender Pass | IMAGE | beauty / depth / lineart / normal |
-| Blender Prompt | STRING ×2 | Prompt und Negativ-Prompt aus dem Panel |
-| Blender Object Prompts | CONDITIONING | nimmt CLIP und Basis-Konditionierung, hängt pro Objekt den maskierten Objekt-Prompt an |
-| Blender Selection | MASK, IMAGE, BOOLEAN, STRING | Maske der Auswahl, letztes Ergebnis, „ist Redo Selection?“, Änderungs-Prompt |
-| Blender Render Size | INT ×2 | Render-Auflösung |
-| Blender Setting (Float / Int / Bool) | Wert | erscheint als Regler im Panel (Label, Wert, Min, Max) |
+| Blender Prompt | 2 × STRING | prompt and negative prompt from the panel |
+| Blender Object Prompts | CONDITIONING | takes CLIP and a base conditioning, adds each object's masked prompt |
+| Blender Selection | MASK, IMAGE, BOOLEAN, STRING | selection mask, previous result, "is this Redo Selection?", change prompt |
+| Blender Render Size | 2 × INT | render resolution |
+| Blender Setting (Float / Int / Bool) | value | shows up as a control in the panel (label, value, min, max) |
 
-Alle Nodes haben eingebaute Platzhalter (der Blockout-Raum). So läuft ein Workflow auch allein in ComfyUI.
+Every node has a built-in placeholder (a blockout room), so a workflow also runs on its own in ComfyUI.
 
-**Beispiele:** Beim ersten Verbinden und über Advanced › **Install Examples** kopiert das Add-on die Vorlagen nach *Workflows › Comfy Bridge*: „SDXL · Canny + Depth“, „SDXL · Depth + Objects + Inpaint“ und „Qwen 2.1 · Depth (evaluation only)“. Alle sind in Gruppen aufgebaut: Blender Inputs → Model → Prompts → Control → Sampler → Inpaint → Output. Hast du ein Beispiel verändert, bleibt deine Version, und eine neuere Vorlage landet als „<Name> (new).json“ daneben. Am besten kopierst du Beispiele mit **Save As**, bevor du sie änderst.
+**Your own model:** put the model files into ComfyUI's models folder, build the workflow, add Blender Pass instead of Load Image, Blender Prompt into the text encoder, Blender Render Size into the latent size and a Blender Setting for every value you want as a slider, then save. The simplest start is an example copied with Save As.
 
-Workflows mit Subgraphen bitte vor dem Speichern auflösen (Rechtsklick › Unpack Subgraph). Das meldet das Panel auch selbst. Reroutes, Primitive-Nodes sowie gemutete und überbrückte Nodes werden unterstützt.
+**Examples** are copied to *Workflows › Lazy Comfy* on the first connection and via Advanced › **Install Examples**: "SDXL · Canny + Depth", "SDXL · Depth + Objects + Inpaint" and "Qwen 2.1 · Depth (evaluation only)". They are laid out in groups: Blender Inputs → Model → Prompts → Control → Sampler → Inpaint → Output. If you changed an example, your version stays and a newer one is added next to it as "<name> (new).json". Copy an example with **Save As** before you change it.
 
-## Workflows als API-Datei (alte Titel-Konvention)
+Subgraphs must be unpacked before saving (right-click › Unpack Subgraph); the panel says so. Reroutes, primitive nodes, muted and bypassed nodes are supported.
 
-Funktioniert weiterhin als Fallback: In ComfyUI **Workflow → Export (API)** und die JSON in den Workflow-Ordner aus den Add-on-Einstellungen legen. Gesteuert wird über Node-Titel (Rechtsklick auf den Node → Title):
+## Object prompts
 
-| Titel | Node | Wirkung |
+Give objects a prompt in Object Properties › Lazy Comfy, e.g. "glossy red lacquer coffee table". Workflows with the Blender Object Prompts node get a Cryptomatte mask plus prompt for every visible object that has one; the main prompt still covers the rest. Objects outside the frame are skipped.
+
+## Redo Selection
+
+Changes only the selected objects in the last result:
+
+1. Render & Generate.
+2. Select objects in the viewport, describe the change ("green velvet sofa").
+3. **Redo Selection**. Blender renders the selection mask (grown and feathered, see Advanced), the workflow repaints only there with the same seed and composites the result back – everything outside the mask stays pixel-identical. Edits stack.
+
+## Model packages
+
+Advanced › Model Packages installs curated model files plus a matching workflow. The catalog (`lazy_comfy/catalog.json`) lists source, target folder, size and SHA256 per file, and license, VRAM and required nodes per package.
+
+- A dialog shows size, free disk space and license before downloading.
+- Downloads run in the background, resume after an interruption (`.part`) and are checked against their SHA256 before they are moved into place.
+- Target is the models folder from Comfy Desktop's settings, or the one set in the preferences.
+- **Delete** only removes files no other installed package uses.
+- No free URL input. Custom nodes are never installed automatically, only reported.
+- A Hugging Face token for gated models belongs in the preferences, never in a .blend. The current packages need none.
+
+Licenses: Juggernaut XL and the xinsir ControlNets allow commercial use of images; Flux.1 [dev] is non-commercial; Qwen-Image 2.1 (qwen-research) is for evaluation only.
+
+## Older API-format workflows
+
+Workflows exported with Workflow › Export (API) still work when "Show API Files" is on in the preferences. They use node titles instead of Blender nodes:
+
+| Title | Node | Effect |
 |---|---|---|
-| `BL:beauty` | Load Image | bekommt den normalen Render |
-| `BL:depth` | Load Image | Tiefe: nah = hell, fern = dunkel, Hintergrund schwarz |
-| `BL:normal` | Load Image | Normalen im Kameraraum (blau = zur Kamera) |
-| `BL:lineart` | Load Image | Freestyle-Linien, weiß auf schwarz |
-| `BL:mask_Sofa` | Load Image | weiße Maske für Objekt oder Collection „Sofa“ (sonst alle Objekte, die mit „Sofa“ anfangen) |
-| `BL:size` | Empty Latent Image | bekommt die Render-Auflösung (auf 8 gerundet) |
-| `BL:result` | Save Image | gilt als Hauptergebnis |
-| `UI:Name` | beliebig | alle Werte des Nodes erscheinen als Regler im Panel |
-| `UI:Name [a, b]` | beliebig | nur die Eingänge `a` und `b` erscheinen (z. B. `UI:Sampler [steps]`, um `cfg` zu verstecken) |
-| `BL:region_1`, `BL:region_1_mask`, `BL:region_1_prompt` | Conditioning Set Mask, Load Image Mask, Text Encode | ein Slot für einen Objekt-Prompt (Nummer frei, beliebig viele Slots) |
-| `BL:result_prev` | Load Image | Edit-Workflows: das letzte Ergebnis |
-| `BL:mask_selection` | Load Image Mask | Edit-Workflows: Maske der ausgewählten Objekte, vergrößert und weich |
-| `BL:edit_prompt` | Text Encode | Edit-Workflows: Text aus dem Feld „Change“ |
+| `BL:beauty`, `BL:depth`, `BL:normal`, `BL:lineart` | Load Image | receives that pass |
+| `BL:mask_Sofa` | Load Image | white mask of object or collection "Sofa" (else all objects starting with "Sofa") |
+| `BL:size` | Empty Latent Image | render resolution (rounded to 8) |
+| `BL:result` | Save Image | main result |
+| `UI:Name` / `UI:Name [a, b]` | any | all (or only the listed) inputs become panel controls |
+| `BL:region_1`, `BL:region_1_mask`, `BL:region_1_prompt` | Conditioning Set Mask, Load Image Mask, Text Encode | one object prompt slot |
+| `BL:result_prev`, `BL:mask_selection`, `BL:edit_prompt` | Load Image, Load Image Mask, Text Encode | Redo Selection in edit workflows |
 
-Fehlt `BL:size`, bekommen alle Empty-Latent-Nodes die Auflösung. Modell-Dateien (Checkpoints, ControlNets, VAE, Encoder, LoRAs) erscheinen immer als Dropdown, gefüllt mit dem, was in ComfyUI liegt. ControlNets werden am Dateinamen nach SDXL/Flux gefiltert. „Show All Models“ (Advanced) hebt den Filter auf. Seeds werden in allen KSamplern gesetzt.
+## Notes
 
-Werte, die du im Panel änderst, merkt sich die .blend pro Workflow.
+- Passes are read from the Render Result; the scene's compositor is left alone. The needed passes (and Freestyle for line art) are switched on for the render and back off afterwards, on every rendered view layer.
+- Multilayer EXRs are read both multipart and interleaved (Cycles with denoising).
+- Normal ControlNets disagree on the red channel; if lighting looks mirrored, tick "Flip Normal X".
+- Coming from Comfy Bridge (the add-on's old name): settings of a still-installed Comfy Bridge, object prompts and panel values in .blend files, and the ComfyUI example folder are taken over automatically.
 
-## Mitgelieferte Beispiele
-
-- **SDXL Canny Depth**: Juggernaut XL, Canny aus dem Beauty-Render plus Depth aus Blender.
-- **Flux GGUF Canny Depth**: Flux.1 dev Q8 (GGUF), InstantX Canny, Shakker Depth. Auf 16 GB VRAM sehr langsam.
-- **Qwen-Image 2.1 Depth – research license**: Qwen-Image 2.1 (int8) mit Fun ControlNet Union auf dem Depth-Pass. Hält die Blockout-Geometrie am genauesten ein, etwa 23 s pro Bild auf einer RTX 4080. Lizenz qwen-research: nur zur Evaluierung, nicht kommerziell.
-
-Benötigte Dateien im ComfyUI-Modellordner: `juggernautXL_ragnarokBy.safetensors`, `controlnet-canny-sdxl.safetensors` (xinsir), `controlnet-depth-sdxl.safetensors` (xinsir), `flux1-dev-Q8_0.gguf`, `t5-v1_1-xxl-encoder-Q8_0.gguf`, `clip_l.safetensors`, `ae.safetensors`, `flux-canny-instantx.safetensors`, `flux-depth-shakker.safetensors`. Für den Flux-Workflow braucht es außerdem die Custom Nodes ComfyUI-GGUF.
-
-Flux.1 dev steht unter der FLUX Non-Commercial License.
-
-## Objekt-Prompts
-
-In den Objekt-Properties hat jedes Objekt unter **Comfy Bridge** ein Feld **Prompt**, z. B. „glossy red lacquer coffee table“ für den Tisch. Workflows mit Objekt-Slots (Beispiel: **SDXL Object Prompts Depth**, 4 Slots) bekommen für jedes sichtbare Objekt mit Prompt eine Cryptomatte-Maske und den Prompt. Der Hauptprompt gilt weiter für den Rest. Der Bereich **Object Prompts** zeigt, wie viele Slots belegt sind, und regelt mit **Object Prompt Strength**, wie stark der Objekt-Prompt in seiner Maske gegen den Hauptprompt gewinnt.
-
-Objekte, die nicht im Bild sind, werden übersprungen. Sind es mehr Objekte als Slots, gehen die ersten (alphabetisch) durch, der Rest wird mit Warnung ausgelassen. Getestet sind 4 Slots im Blockout, mehr Slots gehen mit mehr Nodes im Workflow.
-
-## Edit Selection
-
-Ändert nur die ausgewählten Objekte im letzten Ergebnis:
-
-1. Render & Send.
-2. Objekte im Viewport auswählen, im Bereich **Edit Selection** beschreiben, was sie werden sollen („green velvet sofa“).
-3. **Redo Selection**. Blender rendert die Maske der Auswahl (um **Grow** Pixel vergrößert, um **Feather** Pixel weich), der Edit-Workflow malt mit demselben Seed nur dort neu.
-
-Der Beispiel-Workflow **SDXL Edit Selection** nutzt Juggernaut mit Differential Diffusion und Depth, ein eigenes Inpaint-Modell braucht er nicht. Am Ende setzt `ImageCompositeMasked` das neue Bild nur innerhalb der Maske ein: Außerhalb bleibt jedes Pixel gleich (im Test 0 von 700.000 Pixeln geändert). Das Ergebnis wird wieder zum „letzten Ergebnis“, Edits lassen sich also stapeln. Die PNG enthält den Workflow (`prompt`-Metadaten) und lässt sich zur Feinarbeit in ComfyUI ziehen.
-
-## Model Packages
-
-Im Bereich **Model Packages** installiert ein Klick die Modelldateien eines Pakets samt passendem Workflow. Der Katalog (`comfy_bridge/catalog.json`) kommt mit dem Add-on und enthält pro Datei Quelle, Zielordner, Größe und SHA256, pro Paket Lizenz, VRAM-Bedarf und die nötigen ComfyUI-Nodes.
-
-- Vor dem Download zeigt ein Dialog Größe, freien Speicher und Lizenz.
-- Geladen wird im Hintergrund. Ein abgebrochener Download macht beim nächsten Mal dort weiter (`.part`-Datei).
-- Jede Datei wird gegen ihren SHA256 geprüft und erst danach in den Modellordner verschoben.
-- Zielordner ist der Modellordner aus den Comfy-Desktop-Einstellungen. In den Add-on-Einstellungen lässt er sich ändern.
-- **Delete** löscht nur Dateien, die kein anderes installiertes Paket braucht.
-- Es gibt keine freie URL-Eingabe. Custom Nodes installiert das Add-on nicht, es meldet nur, wenn welche fehlen.
-- Ein Hugging-Face-Token für gesperrte Modelle gehört in die Add-on-Einstellungen, nie in die .blend. Die aktuellen Pakete brauchen keinen.
-
-## Hinweise
-
-- Pässe werden aus dem Render Result gelesen. Den Compositor deiner Szene fasst das Add-on nicht an. Für den Render schaltet es die nötigen Pässe (und für Line Art Freestyle) kurz ein und danach wieder aus.
-- Normal-ControlNets sind sich bei der Rot-Richtung nicht einig. Wirkt das Ergebnis seitenverkehrt beleuchtet, „Flip Normal X“ (Advanced) anhaken.
-- Bei Cycles mit Denoising oder „Interleave“ speichert Blender die EXR einteilig. Das Add-on liest beide Varianten.
-
-## Entwicklung
+## Development
 
 ```
-blender --command extension build --source-dir comfy_bridge --output-dir dist
-blender --command extension install-file -r user_default -e dist/comfy_bridge-0.1.0.zip
-blender -b --python tests/blockout_test.py -- SDXL_Canny_Depth.json
+blender --command extension build --source-dir lazy_comfy --output-dir dist
+blender --command extension install-file -r user_default -e dist/lazy_comfy-<version>.zip
+blender -b --python tests/blockout_test.py -- none examples/blockout_room.blend
 ```
 
-`tests/blockout_test.py` baut einen Blockout-Raum, rendert ihn und schickt ihn durch ComfyUI (ComfyUI muss laufen). `tests/passes_test.py` prüft nur die Pässe. `tests/nodes_test.py` prüft die Blender-Nodes-Vorlagen (Vergleich mit dem alten Workflow, Objekt-Prompts, Redo Selection), `tests/convert_test.py` lässt die Vorlagen nur mit Platzhaltern laufen. Die Vorlagen entstehen mit `tools/make_templates.py`, das Node-Paket liegt in `comfy_bridge/comfyui_nodes/comfy_bridge_nodes`.
+`tests/blockout_test.py` builds the blockout room (and with a workflow name sends it through ComfyUI). `tests/nodes_test.py` checks the node templates (against the old workflow, object prompts, Redo Selection), `tests/convert_test.py` runs the templates with placeholders only, `tests/passes_test.py` checks the passes. Templates are built with `tools/make_templates.py`; the node pack lives in `lazy_comfy/comfyui_nodes/lazy_comfy_nodes`. To test without touching your own Blender, set `BLENDER_USER_RESOURCES` to a scratch folder.
 
-Für einen eigenen Entwicklungsstand ohne Release statt `-r user_default` lokal installieren. Die Version aus dem Update-Repo vorher entfernen (`blender --command extension remove comfy_bridge_github.comfy_bridge`).
+Releases: bump the version in `lazy_comfy/blender_manifest.toml`, commit, push, then run `tools/release.ps1`.
 
-Releases: Version in `comfy_bridge/blender_manifest.toml` erhöhen, committen, pushen, dann `tools/release.ps1`. Das Skript baut das Paket und den Extension-Index und legt ein GitHub-Release an. In Blender wird einmal `https://github.com/timborabora/comfy_bridge/releases/latest/download/index.json` als Remote Repository eingetragen. Danach bietet Blender neue Versionen selbst an.
+License: MIT.

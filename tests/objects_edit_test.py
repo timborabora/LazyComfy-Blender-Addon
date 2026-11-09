@@ -1,6 +1,6 @@
 """Object prompts + Redo Selection on the blockout (ComfyUI must be running).
 
-blender -b examples/blockout_raum.blend --python tests/objects_edit_test.py -- <output folder>
+blender -b examples/blockout_room.blend --python tests/objects_edit_test.py -- <output folder>
 Never saves the opened .blend.
 """
 
@@ -13,7 +13,7 @@ import numpy as np
 
 out = os.path.abspath(sys.argv[sys.argv.index("--") + 1])
 os.makedirs(out, exist_ok=True)
-mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("comfy_bridge"))
+mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod, default_set=True)
 bpy.context.preferences.addons[mod].preferences.show_api_files = True  # old API-file examples
 ops = sys.modules[mod + ".operators"]
@@ -24,15 +24,15 @@ prefs = bpy.context.preferences.addons[mod].preferences
 prefs.output_dir = out
 
 scene, layer = bpy.context.scene, bpy.context.view_layer
-s = scene.comfy_bridge
+s = scene.lazy_comfy
 ops.connect_sync()
 pr.refresh_workflow_items()
 s.workflow = next(p for p, _, _ in st.workflow_items if p.endswith("SDXL_Object_Prompts_Depth.json"))
 s.edit_workflow = next(p for p, _, _ in st.edit_workflow_items if p.endswith("SDXL_Edit_Selection.json"))
 print("TEST info", s.workflow_info, "| slots", s.region_slots)
 
-bpy.data.objects["Tisch"].comfy_prompt = "glossy red lacquer coffee table"
-bpy.data.objects["Regal"].comfy_prompt = "white carrara marble bookshelf"
+bpy.data.objects["Table"].lazy_comfy_prompt = "glossy red lacquer coffee table"
+bpy.data.objects["Shelf"].lazy_comfy_prompt = "white carrara marble bookshelf"
 s.seed_random, s.seed = False, 777
 
 

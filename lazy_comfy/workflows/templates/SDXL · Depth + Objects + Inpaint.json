@@ -1643,7 +1643,7 @@
     "Node name for S&R": "SaveImage"
    },
    "widgets_values": [
-    "comfy_bridge/sdxl_objects"
+    "lazy_comfy/sdxl_objects"
    ]
   }
  ],
@@ -2127,7 +2127,7 @@
     40
    ]
   },
-  "comfy_bridge": {
+  "lazy_comfy": {
    "description": "Depth-guided SDXL with per-object prompts and Redo Selection (inpaint branch).",
    "packages": [
     "sdxl_canny_depth"

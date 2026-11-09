@@ -14,7 +14,7 @@
   "6": {"class_type": "EmptyLatentImage", "_meta": {"title": "BL:size"},
         "inputs": {"width": 1024, "height": 1024, "batch_size": 1}},
   "7": {"class_type": "LoadImage", "_meta": {"title": "BL:depth"},
-        "inputs": {"image": "cb_depth.png"}},
+        "inputs": {"image": "lc_depth.png"}},
   "8": {"class_type": "ModelPatchLoader", "_meta": {"title": "ControlNet Union"},
         "inputs": {"name": "qwen_image_2.1_fun_controlnet_union_int8_convrot.safetensors"}},
   "9": {"class_type": "QwenImageDiffsynthControlnet", "_meta": {"title": "UI:Depth"},
@@ -27,5 +27,5 @@
   "11": {"class_type": "VAEDecode", "_meta": {"title": "VAE Decode"},
          "inputs": {"samples": ["10", 0], "vae": ["4", 0]}},
   "12": {"class_type": "SaveImage", "_meta": {"title": "BL:result"},
-         "inputs": {"images": ["11", 0], "filename_prefix": "comfy_bridge/qwen"}}
+         "inputs": {"images": ["11", 0], "filename_prefix": "lazy_comfy/qwen"}}
 }

@@ -12,7 +12,7 @@ import node_helpers
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLACEHOLDERS = os.path.join(HERE, "placeholders")
 PASSES = ["beauty", "depth", "lineart", "normal"]
-CATEGORY = "Comfy Bridge"
+CATEGORY = "Lazy Comfy"
 SET_BY_BLENDER = "Set by Blender when it sends a render. Empty = built-in placeholder."
 
 

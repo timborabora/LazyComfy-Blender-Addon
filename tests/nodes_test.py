@@ -1,6 +1,6 @@
-"""Node-based workflows saved in ComfyUI (ComfyUI with comfy_bridge_nodes must be running).
+"""Node-based workflows saved in ComfyUI (ComfyUI with lazy_comfy_nodes must be running).
 
-blender -b examples/blockout_raum.blend --python tests/nodes_test.py -- <output folder>
+blender -b examples/blockout_room.blend --python tests/nodes_test.py -- <output folder>
 1. Examples are shipped and listed from ComfyUI's workflow folder.
 2. "SDXL · Canny + Depth" with the old BL: workflow's settings gives the same image.
 3. "SDXL · Depth + Objects + Inpaint": object prompts, then Redo Selection on the sofa.
@@ -16,13 +16,13 @@ import numpy as np
 
 out = os.path.abspath(sys.argv[sys.argv.index("--") + 1])
 os.makedirs(out, exist_ok=True)
-mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("comfy_bridge"))
+mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod, default_set=True)
 bpy.context.preferences.addons[mod].preferences.show_api_files = True  # old API-file examples
 ops, st, pr, passes = (sys.modules[mod + x] for x in (".operators", ".state", ".props", ".passes"))
 bpy.context.preferences.addons[mod].preferences.output_dir = out
 scene, layer = bpy.context.scene, bpy.context.view_layer
-s = scene.comfy_bridge
+s = scene.lazy_comfy
 
 ops.connect_sync()
 print("TEST examples:", st.examples_message)
@@ -80,8 +80,8 @@ print(f"TEST old vs node template: max diff={int(d.max())} mean={float(d.mean())
 
 # 3) objects + Redo Selection on the node template
 pick("SDXL · Depth + Objects + Inpaint.json")
-bpy.data.objects["Tisch"].comfy_prompt = "glossy red lacquer coffee table"
-bpy.data.objects["Regal"].comfy_prompt = "white carrara marble bookshelf"
+bpy.data.objects["Table"].lazy_comfy_prompt = "glossy red lacquer coffee table"
+bpy.data.objects["Shelf"].lazy_comfy_prompt = "white carrara marble bookshelf"
 s.seed = 777
 render_and_run()
 a_path = s.last_result

@@ -284,7 +284,7 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False, masks=None):
     os.makedirs(out_dir, exist_ok=True)
     files, warnings, visible = {}, [], {}
 
-    beauty = os.path.join(out_dir, "cb_beauty.png")
+    beauty = os.path.join(out_dir, "lc_beauty.png")
     try:
         _save_render(img, scene, beauty, "IMAGE", "PNG", "RGB", "8")
     except RuntimeError as e:
@@ -295,13 +295,13 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False, masks=None):
     if not rest and not masks:
         return files, warnings, visible
 
-    exr = os.path.join(out_dir, "cb_passes.exr")
+    exr = os.path.join(out_dir, "lc_passes.exr")
     _save_render(img, scene, exr, "MULTI_LAYER_IMAGE", "OPEN_EXR_MULTILAYER", "RGBA", "32")
     parts, attribs = _read_exr(exr)
     vl = view_layer.name
 
     for key in rest:
-        path = os.path.join(out_dir, f"cb_{key.replace(':', '_')}.png")
+        path = os.path.join(out_dir, f"lc_{key.replace(':', '_')}.png")
         if key == "depth":
             z = _part(parts, vl, "Depth")
             if z is None:
@@ -334,7 +334,7 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False, masks=None):
         mask = grow_feather(mask, spec.get("grow", 0), spec.get("feather", 0))
         if spec.get("size"):
             mask = resize_nearest(mask, *spec["size"])
-        path = os.path.join(out_dir, f"cb_{key.replace(':', '_')}.png")
+        path = os.path.join(out_dir, f"lc_{key.replace(':', '_')}.png")
         write_png(path, mask)
         files[key], visible[key] = path, seen
     return files, warnings, visible

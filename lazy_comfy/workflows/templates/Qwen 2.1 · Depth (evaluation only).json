@@ -977,7 +977,7 @@
     "Node name for S&R": "SaveImage"
    },
    "widgets_values": [
-    "comfy_bridge/qwen"
+    "lazy_comfy/qwen"
    ]
   },
   {
@@ -1267,7 +1267,7 @@
     40
    ]
   },
-  "comfy_bridge": {
+  "lazy_comfy": {
    "description": "Qwen-Image 2.1 with ControlNet Union on Blender depth. License qwen-research: evaluation only, no commercial use.",
    "packages": [
     "qwen_image_21_depth"

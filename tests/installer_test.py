@@ -11,7 +11,7 @@ import sys
 import tempfile
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "comfy_bridge"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lazy_comfy"))
 import installer  # noqa: E402
 
 root = installer.comfy_desktop_models_dir()
@@ -21,7 +21,7 @@ for pkg in installer.load_catalog():
 
 clip = next(f for p in installer.load_catalog() for f in p["files"] if f["name"] == "clip_l.safetensors")
 pkg = {"id": "test", "name": "Test", "files": [clip]}
-tmp = tempfile.mkdtemp(prefix="cb_install_")
+tmp = tempfile.mkdtemp(prefix="lc_install_")
 try:
     # 1) start, cancel after ~60 MB
     dl = installer.Download(pkg, tmp)

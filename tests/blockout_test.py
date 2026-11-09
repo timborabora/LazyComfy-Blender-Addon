@@ -1,4 +1,4 @@
-"""Headless-Test: Blockout bauen, rendern, über Comfy Bridge an ComfyUI schicken.
+"""Headless test: build the blockout, render it, send it to ComfyUI through Lazy Comfy.
 
 blender -b --python tests/blockout_test.py -- [Workflow-Dateiname] [Ausgabe.blend]
 """
@@ -12,9 +12,9 @@ import bpy
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 WORKFLOW = argv[0] if argv else "SDXL_Canny_Depth.json"
-BLEND = argv[1] if len(argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "examples", "blockout_raum.blend")
+BLEND = argv[1] if len(argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "examples", "blockout_room.blend")
 
-mod_name = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("comfy_bridge"))
+mod_name = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod_name, default_set=True)
 bpy.context.preferences.addons[mod_name].preferences.show_api_files = True  # old API-file examples
 cb = sys.modules[mod_name]
@@ -34,30 +34,30 @@ def box(name, loc, size):
 bpy.ops.wm.read_factory_settings(use_empty=True)
 addon_utils.enable(mod_name, default_set=True)
 scene = bpy.context.scene
-# Raum 6 x 5 m, 3 m hoch
-box("Boden", (0, 0, -0.05), (6, 5, 0.1))
-box("Wand_hinten", (0, 2.55, 1.5), (6, 0.1, 3))
-box("Wand_links_unten", (-3.05, 0, 0.45), (0.1, 5, 0.9))
-box("Wand_links_oben", (-3.05, 0, 2.7), (0.1, 5, 0.6))
-box("Wand_links_vorn", (-3.05, -1.9, 1.5), (0.1, 1.2, 3))
-box("Wand_links_hinten", (-3.05, 1.9, 1.5), (0.1, 1.2, 3))
-box("Sofa_Sitz", (0.3, 1.6, 0.22), (2.4, 0.95, 0.44))
-box("Sofa_Lehne", (0.3, 2.0, 0.6), (2.4, 0.2, 0.75))
-box("Tisch", (0.3, 0.3, 0.2), (1.2, 0.7, 0.4))
-box("Regal", (2.4, 2.25, 1.0), (1.0, 0.4, 2.0))
+# room 6 x 5 m, 3 m high
+box("Floor", (0, 0, -0.05), (6, 5, 0.1))
+box("Wall_Back", (0, 2.55, 1.5), (6, 0.1, 3))
+box("Wall_Left_Low", (-3.05, 0, 0.45), (0.1, 5, 0.9))
+box("Wall_Left_High", (-3.05, 0, 2.7), (0.1, 5, 0.6))
+box("Wall_Left_Front", (-3.05, -1.9, 1.5), (0.1, 1.2, 3))
+box("Wall_Left_Back", (-3.05, 1.9, 1.5), (0.1, 1.2, 3))
+box("Sofa_Seat", (0.3, 1.6, 0.22), (2.4, 0.95, 0.44))
+box("Sofa_Back", (0.3, 2.0, 0.6), (2.4, 0.2, 0.75))
+box("Table", (0.3, 0.3, 0.2), (1.2, 0.7, 0.4))
+box("Shelf", (2.4, 2.25, 1.0), (1.0, 0.4, 2.0))
 
-cam_data = bpy.data.cameras.new("Kamera")
+cam_data = bpy.data.cameras.new("Camera")
 cam_data.lens = 24
-cam = bpy.data.objects.new("Kamera", cam_data)
+cam = bpy.data.objects.new("Camera", cam_data)
 scene.collection.objects.link(cam)
 cam.location = (2.6, -2.3, 1.5)
 cam.rotation_euler = (1.45, 0.0, 0.62)
 scene.camera = cam
-sun = bpy.data.objects.new("Sonne", bpy.data.lights.new("Sonne", "SUN"))
+sun = bpy.data.objects.new("Sun", bpy.data.lights.new("Sun", "SUN"))
 sun.data.energy = 3.0
 sun.rotation_euler = (0.9, 0.0, -1.2)
 scene.collection.objects.link(sun)
-scene.world = bpy.data.worlds.new("Welt")
+scene.world = bpy.data.worlds.new("World")
 scene.world.color = (0.25, 0.25, 0.27)
 
 scene.render.engine = "BLENDER_EEVEE"
@@ -74,7 +74,7 @@ base = ops.connect_sync()
 print("TEST server", base, st.stats["system"]["comfyui_version"])
 pr.refresh_workflow_items()
 path = next(p for p, label, _ in st.workflow_items if p.endswith(WORKFLOW))
-s = scene.comfy_bridge
+s = scene.lazy_comfy
 s.workflow = path
 print("TEST info", s.workflow_info, "| warnings:", s.workflow_warnings or "-")
 for p in s.params:
@@ -101,5 +101,5 @@ print("TEST warnings", warnings)
 print("TEST status", s.status, "| error:", s.last_error or "-", "| comfy s", round(time.time() - t0, 1))
 print("TEST results", job.results)
 print("TEST images", [i.name for i in bpy.data.images])
-print("TEST history", bpy.data.texts["ComfyBridge_History"].as_string()[:300])
+print("TEST history", bpy.data.texts["LazyComfy_History"].as_string()[:300])
 bpy.ops.wm.save_mainfile()
