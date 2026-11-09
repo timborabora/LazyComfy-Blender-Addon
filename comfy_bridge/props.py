@@ -22,9 +22,14 @@ def workflow_folders(context=None):
 
 
 def refresh_workflow_items(context=None):
+    """Saved ComfyUI workflows with Blender nodes first, then API-format files (fallback)."""
     found = workflows.scan(workflow_folders(context))
-    state.workflow_items = [(p, label, p) for p, label, _ in found if not workflows.is_edit_workflow(p)]
-    state.edit_workflow_items = [(p, label, p) for p, label, _ in found if workflows.is_edit_workflow(p)]
+    comfy = [(ident, label, "Saved in ComfyUI: " + ident[len(workflows.COMFY_PREFIX):])
+             for ident, label, _ in state.comfy_index]
+    api_main = [(p, label + "  [API file]", p) for p, label, _ in found if not workflows.is_edit_workflow(p)]
+    api_edit = [(p, label + "  [API file]", p) for p, label, _ in found if workflows.is_edit_workflow(p)]
+    state.workflow_items = comfy + api_main
+    state.edit_workflow_items = [(i, l, d) for (i, l, d), (_, _, sel) in zip(comfy, state.comfy_index) if sel] + api_edit
     return state.workflow_items
 
 
@@ -141,6 +146,9 @@ class CB_Settings(bpy.types.PropertyGroup):
     workflow_needed: bpy.props.StringProperty()
     workflow_warnings: bpy.props.StringProperty()
     region_slots: bpy.props.IntProperty()
+    missing_packages: bpy.props.StringProperty()
+    missing_nodes: bpy.props.StringProperty()
+    workflow_can_edit: bpy.props.BoolProperty()
     params: bpy.props.CollectionProperty(type=CB_Param)
     saved_values: bpy.props.StringProperty(default="{}")
 

@@ -2,28 +2,49 @@
 
 Blender-Add-on (ab 5.0): Blender rendert, ComfyUI rechnet. Render und Render-Pässe gehen mit einem Klick an das lokale ComfyUI, das Ergebnis landet im Image Editor.
 
-Das Panel sitzt unter **Render Properties → Comfy Bridge** und ist auf Englisch. Oben stehen Verbindung, Workflow, **Render & Send**, **Send Last Render** und der Status, darunter einklappbare Bereiche:
+Das Panel sitzt unter **Render Properties → Comfy Bridge** und ist auf Englisch:
 
-- **Prompts**: die Prompt-Felder des Workflows.
-- **Models** (zugeklappt): Modell-Dropdowns.
-- **Settings** (zugeklappt): die `UI:`-Regler und der Seed.
-- **Advanced** (zugeklappt): zusätzliche Pässe, Normal-Konvention, Anzeige-Optionen, Modellfilter.
+- oben Verbindung und Workflow, darunter Prompt und die Regler des Workflows
+- **Render & Generate**, **Send Last Render**
+- das Feld „Change“ mit **Redo Selection**
+- einklappbar: **Object Prompts**, **Models**, **Settings**, **Advanced**, **Model Packages**
 
-Mehrere ControlNets oder andere Modelle (Qwen-Image usw.) brauchen keinen Add-on-Code. Das regelt allein der Workflow.
+In Blender passiert nur, was Blender weiß: Objekte, Masken, Kamera, Pässe. Die Bildarbeit (Modelle, ControlNets, Sampler, LoRAs, Upscaler) bleibt im ComfyUI-Workflow.
 
 ## Ablauf
 
 1. Comfy Desktop starten. Das Add-on findet den Server selbst (8188, 8000, …). Mit ↻ wird neu gesucht.
-2. Workflow wählen. Das Panel zeigt, welche Pässe der Workflow braucht, und baut Modell-Dropdowns und Regler aus dem Workflow auf.
-3. **Render & Send**. Blender rendert mit den nötigen Pässen, erzeugt die Steuerbilder, lädt sie hoch und zeigt den Fortschritt. Das Ergebnis heißt im Image Editor `ComfyUI Result`.
+2. Workflow wählen. Das Panel zeigt Prompt, die Regler des Workflows und was fehlt (Modell-Paket mit **Install**-Knopf, fehlende Nodes).
+3. **Render & Generate**. Blender rendert mit den nötigen Pässen, lädt sie hoch und zeigt den Fortschritt. Das Ergebnis heißt im Image Editor `ComfyUI Result`.
 
 **Send Last Render** nimmt den vorhandenen Render. Fehlen Pässe (z. B. Depth), braucht es einen neuen Render.
 
 Jeder Lauf landet als Zeile im Textblock `ComfyBridge_History` (Seed, Workflow, alle Werte). ComfyUI schreibt zusätzlich den kompletten Workflow in die PNG.
 
-## Eigene Workflows
+## Workflows in ComfyUI (Blender-Nodes)
 
-In ComfyUI bauen, einmal dort testen, dann **Workflow → Export (API)** und die JSON in den Workflow-Ordner legen. Der Ordner wird in den Add-on-Einstellungen gewählt, mit dem 📁-Knopf öffnest du ihn. Gesteuert wird über Node-Titel (Rechtsklick auf den Node → Title):
+ComfyUI ist die Werkstatt: Workflows dort anpassen und ganz normal mit **Strg+S** speichern. Ein API-Export ist nicht nötig. Das Dropdown in Blender zeigt alle in ComfyUI gespeicherten Workflows, die mindestens einen Blender-Node enthalten. Das Add-on wandelt sie selbst ins API-Format um.
+
+Die Nodes kommen aus dem Paket `comfy_bridge_nodes`, das mit dem Add-on ausgeliefert wird (Advanced › **Install Blender Nodes**, danach ComfyUI neu starten). Kategorie „Comfy Bridge“:
+
+| Node | Ausgang | Wofür |
+|---|---|---|
+| Blender Pass | IMAGE | beauty / depth / lineart / normal |
+| Blender Prompt | STRING ×2 | Prompt und Negativ-Prompt aus dem Panel |
+| Blender Object Prompts | CONDITIONING | nimmt CLIP und Basis-Konditionierung, hängt pro Objekt den maskierten Objekt-Prompt an |
+| Blender Selection | MASK, IMAGE, BOOLEAN, STRING | Maske der Auswahl, letztes Ergebnis, „ist Redo Selection?“, Änderungs-Prompt |
+| Blender Render Size | INT ×2 | Render-Auflösung |
+| Blender Setting (Float / Int / Bool) | Wert | erscheint als Regler im Panel (Label, Wert, Min, Max) |
+
+Alle Nodes haben eingebaute Platzhalter (der Blockout-Raum). So läuft ein Workflow auch allein in ComfyUI.
+
+**Beispiele:** Beim ersten Verbinden und über Advanced › **Install Examples** kopiert das Add-on die Vorlagen nach *Workflows › Comfy Bridge*: „SDXL · Canny + Depth“, „SDXL · Depth + Objects + Inpaint“ und „Qwen 2.1 · Depth (evaluation only)“. Alle sind in Gruppen aufgebaut: Blender Inputs → Model → Prompts → Control → Sampler → Inpaint → Output. Hast du ein Beispiel verändert, bleibt deine Version, und eine neuere Vorlage landet als „<Name> (new).json“ daneben. Am besten kopierst du Beispiele mit **Save As**, bevor du sie änderst.
+
+Workflows mit Subgraphen bitte vor dem Speichern auflösen (Rechtsklick › Unpack Subgraph). Das meldet das Panel auch selbst. Reroutes, Primitive-Nodes sowie gemutete und überbrückte Nodes werden unterstützt.
+
+## Workflows als API-Datei (alte Titel-Konvention)
+
+Funktioniert weiterhin als Fallback: In ComfyUI **Workflow → Export (API)** und die JSON in den Workflow-Ordner aus den Add-on-Einstellungen legen. Gesteuert wird über Node-Titel (Rechtsklick auf den Node → Title):
 
 | Titel | Node | Wirkung |
 |---|---|---|
@@ -97,7 +118,7 @@ blender --command extension install-file -r user_default -e dist/comfy_bridge-0.
 blender -b --python tests/blockout_test.py -- SDXL_Canny_Depth.json
 ```
 
-`tests/blockout_test.py` baut einen Blockout-Raum, rendert ihn und schickt ihn durch ComfyUI (ComfyUI muss laufen). `tests/passes_test.py` prüft nur die Pässe.
+`tests/blockout_test.py` baut einen Blockout-Raum, rendert ihn und schickt ihn durch ComfyUI (ComfyUI muss laufen). `tests/passes_test.py` prüft nur die Pässe. `tests/nodes_test.py` prüft die Blender-Nodes-Vorlagen (Vergleich mit dem alten Workflow, Objekt-Prompts, Redo Selection), `tests/convert_test.py` lässt die Vorlagen nur mit Platzhaltern laufen. Die Vorlagen entstehen mit `tools/make_templates.py`, das Node-Paket liegt in `comfy_bridge/comfyui_nodes/comfy_bridge_nodes`.
 
 Für einen eigenen Entwicklungsstand ohne Release statt `-r user_default` lokal installieren. Die Version aus dem Update-Repo vorher entfernen (`blender --command extension remove comfy_bridge_github.comfy_bridge`).
 

@@ -8,8 +8,20 @@ import time
 
 import bpy
 
-from . import comfy_client, installer, passes, pipeline, props, state, workflows
+from . import comfy_client, installer, passes, pipeline, props, state, templates, workflows
 from .comfy_client import ComfyError
+
+
+def _addon_version():
+    import tomllib
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "blender_manifest.toml"), "rb") as f:
+            return tomllib.load(f)["version"]
+    except (OSError, KeyError, ValueError):
+        return "dev"
+
+
+ADDON_VERSION = _addon_version()
 
 HISTORY_TEXT = "ComfyBridge_History"
 RESULT_IMAGE = "ComfyUI Result"
@@ -37,14 +49,11 @@ def connect_async():
     state.connecting = True
     state.connect_error = ""
     preferred = prefs().server_url if prefs() else ""
+    manifest = examples_manifest_path()
 
     def work():
         try:
-            base, stats = comfy_client.find_server(preferred)
-            if not base:
-                raise ComfyError("ComfyUI not found. Is Comfy Desktop running?")
-            info = comfy_client.get_json(base, "/object_info", timeout=30)
-            state.server, state.stats, state.object_info = base, stats, info
+            _connect(preferred, manifest)
         except Exception as e:
             state.server, state.stats = None, None
             state.connect_error = str(e)
@@ -56,6 +65,7 @@ def connect_async():
     def wait():
         if state.connecting:
             return 0.2
+        props.refresh_workflow_items()
         for scene in bpy.data.scenes:
             rebuild_params(scene, save_old=True)
         tag_redraw()
@@ -66,12 +76,51 @@ def connect_async():
 
 def connect_sync(preferred=""):
     """For scripts and tests."""
+    _connect(preferred, examples_manifest_path())
+    props.refresh_workflow_items()
+    return state.server
+
+
+def _connect(preferred, manifest):
+    """Find ComfyUI, read its nodes, ship the examples once, list saved workflows. Runs off the main thread."""
     base, stats = comfy_client.find_server(preferred)
     if not base:
-        raise ComfyError("ComfyUI not found.")
-    state.server, state.stats = base, stats
-    state.object_info = comfy_client.get_json(base, "/object_info", timeout=30)
-    return base
+        raise ComfyError("ComfyUI not found. Is Comfy Desktop running?")
+    info = comfy_client.get_json(base, "/object_info", timeout=30)
+    state.server, state.stats, state.object_info = base, stats, info
+    if manifest and templates.load_manifest(manifest).get("__version__") != ADDON_VERSION:
+        try:
+            report = templates.install(base, manifest, ADDON_VERSION)
+            state.examples_message = _examples_summary(report)
+        except ComfyError as e:
+            state.examples_message = f"Examples not installed: {e}"
+    index_comfy_workflows(base)
+
+
+def index_comfy_workflows(base):
+    index = []
+    for path, _ in templates.list_comfy_workflows(base):
+        ui = templates.fetch_workflow(base, path)
+        if not isinstance(ui, dict) or not workflows.has_blender_nodes(ui):
+            continue
+        ident = workflows.COMFY_PREFIX + path
+        state.comfy_workflows[ident] = {"ui": ui}
+        has_sel = any(n.get("type") == "BlenderSelection" for n in ui.get("nodes", []))
+        index.append((ident, os.path.splitext(path)[0], has_sel))
+    state.comfy_index = sorted(index, key=lambda x: x[1].lower())
+
+
+def _examples_summary(report):
+    changed = [f"{name}: {action}" for name, action in report if action != "unchanged"]
+    return "Examples up to date." if not changed else "Examples – " + "; ".join(changed)
+
+
+def examples_manifest_path():
+    try:
+        folder = bpy.utils.extension_path_user(__package__, create=True)
+    except (ValueError, AttributeError):
+        folder = os.path.join(tempfile.gettempdir(), "comfy_bridge")
+    return os.path.join(folder, "examples_manifest.json")
 
 
 # ---------------------------------------------------------------- parameters
@@ -99,20 +148,25 @@ def rebuild_params(scene, save_old=True, from_user=False):
     s.workflow_needed = ""
     s.workflow_warnings = ""
     s.region_slots = 0
+    s.missing_packages = ""
+    s.missing_nodes = ""
     if not path:
         s.saved_values = json.dumps(saved)
         return
     try:
-        wf = workflows.load(path)
+        wf = workflows.load(path, fresh=True)
     except workflows.WorkflowError as e:
+        _set_dependencies(s, path, None)
         s.workflow_warnings = str(e)
         s.saved_values = json.dumps(saved)
         return
+    _set_dependencies(s, path, wf)
     analysis = workflows.analyze(wf, state.object_info)
     s.workflow_info = workflows.describe(analysis)
     s.workflow_family = analysis["family"]
     s.workflow_needed = ",".join(analysis["images"])
     s.region_slots = len(analysis["regions"])
+    s.workflow_can_edit = bool(analysis["blender_selection"])
     s.workflow_warnings = "\n".join(analysis["warnings"])
     old = saved.get(path, {})
     for p in analysis["params"]:
@@ -133,6 +187,25 @@ def rebuild_params(scene, save_old=True, from_user=False):
             state.enum_item_cache[("all", item.key)] = p["options"] or opts
         item.set_value(old.get(item.key, p["value"]))
     s.saved_values = json.dumps(saved)
+
+
+def _set_dependencies(s, path, api):
+    """Model packages and ComfyUI nodes the workflow needs but that are missing."""
+    packages, nodes = [], []
+    if path.startswith(workflows.COMFY_PREFIX):
+        ui = state.comfy_workflows.get(path, {}).get("ui") or {}
+        meta = (ui.get("extra") or {}).get("comfy_bridge") or {}
+        packages = meta.get("packages", [])
+        nodes = meta.get("required_nodes") or sorted({n.get("type") for n in ui.get("nodes", [])
+                                                      if n.get("type") not in ("Reroute", "PrimitiveNode", "Note", "MarkdownNote")})
+    else:
+        packages = [p["id"] for p in installer.load_catalog() if p["workflow"] == os.path.basename(path)]
+        nodes = sorted({n["class_type"] for n in (api or {}).values()})
+    root = models_dir()
+    missing_pkgs = [p for p in packages if (pkg := installer.package(p)) and installer.status(root, pkg)[0] != "installed"]
+    missing_nodes = [n for n in nodes if state.object_info and n not in state.object_info]
+    s.missing_packages = ",".join(missing_pkgs)
+    s.missing_nodes = ",".join(missing_nodes)
 
 
 # ---------------------------------------------------------------- sending
@@ -174,13 +247,16 @@ def selected_objects(scene, view_layer):
 def workflow_needs(scene, view_layer, mode):
     """Workflow, its analysis and the passes to render for `mode` ('main' or 'edit')."""
     s = scene.comfy_bridge
-    path = s.edit_workflow if mode == "edit" else s.workflow
+    path = s.workflow
+    if mode == "edit" and not s.workflow_can_edit:
+        path = s.edit_workflow  # title-convention edit workflow (API file)
     if not path:
         raise workflows.WorkflowError("No edit workflow found." if mode == "edit" else "No workflow selected.")
-    wf = workflows.load(path)
+    wf = workflows.load(path, fresh=True)
     analysis = workflows.analyze(wf, state.object_info)
     wanted = _wanted_passes(s, analysis["images"].keys())
-    if analysis["regions"] or analysis["selection_nodes"]:
+    if analysis["regions"] or analysis["selection_nodes"] or analysis["object_nodes"] \
+            or (mode == "edit" and analysis["blender_selection"]):
         wanted.append("crypto")
     return path, wf, analysis, wanted
 
@@ -202,11 +278,16 @@ def build_job(scene, view_layer, mode="main"):
     path, wf, analysis, wanted = workflow_needs(scene, view_layer, mode)
     warnings = []
 
-    masks, region_objects = {}, []
+    masks, region_objects, node_objects = {}, [], []
     if mode == "main":
         region_objects = prompt_objects(scene, view_layer)
+        if analysis["object_nodes"]:
+            node_objects = region_objects  # Blender Object Prompts node: no slot limit
+            for i, obj in enumerate(node_objects, 1):
+                masks[f"obj_{i}"] = {"names": {obj.name}}
+            region_objects = []
         slots = sorted(analysis["regions"])
-        if len(region_objects) > len(slots):
+        if len(region_objects) > len(slots) and slots:
             skipped = ", ".join(o.name for o in region_objects[len(slots):])
             warnings.append(f"Only {len(slots)} object prompts fit this workflow – skipped: {skipped}")
         region_objects = region_objects[:len(slots)]
@@ -228,11 +309,12 @@ def build_job(scene, view_layer, mode="main"):
     warnings += pass_warnings
 
     wf = copy.deepcopy(wf)
-    if mode == "main":
+    if mode == "main" or analysis["node_based"]:
         for p in s.params:
             node = wf.get(p.node_id)
-            if node and p.input_name in node.get("inputs", {}):
+            if node and p.input_name in node.get("inputs", {}) and not workflows.is_link(node["inputs"][p.input_name]):
                 node["inputs"][p.input_name] = p.get_value()
+    if mode == "main":
         if s.seed_random:
             s.seed = random.randint(0, 2**31 - 1)
         seed = s.seed
@@ -273,12 +355,34 @@ def build_job(scene, view_layer, mode="main"):
         if active:
             used.append(f"{obj.name}: {obj.comfy_prompt}")
 
+    # Blender Object Prompts node: one entry per visible object, masks uploaded alongside.
+    entries = []
+    for i, obj in enumerate(node_objects, 1):
+        key = f"obj_{i}"
+        if not visible.get(key):
+            warnings.append(f"'{obj.name}' is not in the frame – its object prompt is skipped.")
+            continue
+        name = f"cb_{key}.png"
+        uploads.append((files[key], name, []))
+        entries.append({"name": obj.name, "prompt": obj.comfy_prompt, "mask": f"comfy_bridge/{name}"})
+        used.append(f"{obj.name}: {obj.comfy_prompt}")
+    for nid in analysis["object_nodes"]:
+        wf[nid]["inputs"]["objects"] = json.dumps(entries)
+
+    # Blender Selection node: empty for a normal render, so the inpaint branch is skipped.
+    for nid in analysis["blender_selection"]:
+        wf[nid]["inputs"].update({"mask": "", "previous": "", "change": s.edit_prompt if mode == "edit" else ""})
+
     if mode == "edit":
         prev = bpy.path.abspath(s.last_result)
-        uploads.append((prev, "cb_result_prev.png", analysis["prev_nodes"]))
-        uploads.append((files["selection"], "cb_selection.png", analysis["selection_nodes"]))
         if not visible.get("selection"):
             raise passes.PassError("The selected objects are not in the frame.")
+        if analysis["prev_nodes"] or analysis["selection_nodes"]:
+            uploads.append((prev, "cb_result_prev.png", analysis["prev_nodes"]))
+            uploads.append((files["selection"], "cb_selection.png", analysis["selection_nodes"]))
+        if analysis["blender_selection"]:
+            uploads.append((prev, "cb_result_prev.png", analysis["blender_selection"], "previous"))
+            uploads.append((files["selection"], "cb_selection.png", analysis["blender_selection"], "mask"))
 
     s.last_seed = seed
     job = pipeline.Job(state.server, wf, state.client_id, uploads, _output_dir(), analysis["result_nodes"])
@@ -460,7 +564,7 @@ class _SendBase:
 
 class CB_OT_render_send(_SendBase, bpy.types.Operator):
     bl_idname = "comfy_bridge.render_send"
-    bl_label = "Render & Send"
+    bl_label = "Render & Generate"
     bl_description = (
         "Render the scene with the passes the workflow needs, "
         "then send everything to ComfyUI"
@@ -545,7 +649,7 @@ class CB_OT_edit_selection(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         s = context.scene.comfy_bridge
-        return state.server and s.edit_workflow and s.last_result and not s.running
+        return state.server and (s.workflow_can_edit or s.edit_workflow) and s.last_result and not s.running
 
     def execute(self, context):
         return render_then_send(self, context, "edit")
@@ -623,10 +727,14 @@ class CB_OT_install_package(bpy.types.Operator):
     bl_idname = "comfy_bridge.install_package"
     bl_label = "Install Package"
     bl_description = "Download the package's model files into ComfyUI's models folder and select its workflow"
+    package_id: bpy.props.StringProperty(options={"HIDDEN"})
 
     @classmethod
     def poll(cls, context):
         return state.download is None
+
+    def _pkg(self, context):
+        return installer.package(self.package_id or context.scene.comfy_bridge.package)
 
     def invoke(self, context, event):
         if not models_dir():
@@ -635,13 +743,13 @@ class CB_OT_install_package(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Download")
 
     def draw(self, context):
-        pkg = installer.package(context.scene.comfy_bridge.package)
+        pkg = self._pkg(context)
         self.layout.label(text=pkg["name"], icon="PACKAGE")
         _draw_package_facts(self.layout, pkg, models_dir())
         self.layout.label(text=f"Into: {models_dir()}")
 
     def execute(self, context):
-        pkg = installer.package(context.scene.comfy_bridge.package)
+        pkg = self._pkg(context)
         root = models_dir()
         if not root:
             self.report({"ERROR"}, "No ComfyUI models folder found. Set one in the add-on preferences.")
@@ -719,7 +827,56 @@ class CB_OT_delete_package(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def comfyui_dir():
+    p = prefs()
+    if p and p.comfyui_dir:
+        return bpy.path.abspath(p.comfyui_dir)
+    return installer.comfy_desktop_comfyui_dir()
+
+
+class CB_OT_install_nodes(bpy.types.Operator):
+    bl_idname = "comfy_bridge.install_nodes"
+    bl_label = "Install Blender Nodes"
+    bl_description = "Copy the Comfy Bridge nodes into ComfyUI's custom_nodes folder. Restart ComfyUI afterwards"
+
+    def execute(self, context):
+        try:
+            target = installer.install_nodes(comfyui_dir())
+        except (installer.InstallError, OSError) as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        state.download_message = "Blender nodes copied – restart ComfyUI (Comfy Desktop) to load them."
+        self.report({"INFO"}, f"Installed to {target}")
+        return {"FINISHED"}
+
+
+class CB_OT_install_examples(bpy.types.Operator):
+    bl_idname = "comfy_bridge.install_examples"
+    bl_label = "Install Examples"
+    bl_description = ("Copy the example workflows into ComfyUI (Workflows › Comfy Bridge). "
+                      "Edited examples stay – save your changes with 'Save As' to keep them apart")
+
+    @classmethod
+    def poll(cls, context):
+        return bool(state.server)
+
+    def execute(self, context):
+        try:
+            report = templates.install(state.server, examples_manifest_path(), ADDON_VERSION)
+            index_comfy_workflows(state.server)
+        except ComfyError as e:
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        state.examples_message = _examples_summary(report)
+        props.refresh_workflow_items(context)
+        rebuild_params(context.scene, save_old=True)
+        self.report({"INFO"}, state.examples_message)
+        return {"FINISHED"}
+
+
 classes = (
+    CB_OT_install_nodes,
+    CB_OT_install_examples,
     CB_OT_install_package,
     CB_OT_cancel_download,
     CB_OT_delete_package,

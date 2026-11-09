@@ -41,6 +41,59 @@ def comfy_desktop_models_dir():
     return dirs[0] if dirs and os.path.isdir(dirs[0]) else ""
 
 
+NODES_SRC = os.path.join(os.path.dirname(__file__), "comfyui_nodes", "comfy_bridge_nodes")
+NODES_NAME = "comfy_bridge_nodes"
+
+
+def comfy_desktop_comfyui_dir():
+    """ComfyUI folder of the active Comfy Desktop installation (holds custom_nodes)."""
+    base = os.path.join(os.environ.get("APPDATA", ""), "Comfy Desktop")
+    try:
+        with open(os.path.join(base, "installations.json"), "r", encoding="utf-8") as f:
+            installs = json.load(f)
+    except (OSError, ValueError):
+        return ""
+    active = ""
+    try:
+        with open(os.path.join(base, "last-session.json"), "r", encoding="utf-8") as f:
+            active = json.load(f).get("installationId", "")
+    except (OSError, ValueError):
+        pass
+    for inst in sorted(installs, key=lambda i: i.get("id") != active):
+        path = os.path.join(inst.get("installPath", ""), "ComfyUI")
+        if os.path.isdir(os.path.join(path, "custom_nodes")):
+            return path
+    return ""
+
+
+def _read_version(folder):
+    try:
+        with open(os.path.join(folder, "VERSION"), "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def nodes_status(comfyui_dir, object_info):
+    """'loaded' | 'restart' (copied, ComfyUI not restarted) | 'outdated' | 'missing'."""
+    target = os.path.join(comfyui_dir, "custom_nodes", NODES_NAME) if comfyui_dir else ""
+    copied = bool(target) and os.path.isdir(target)
+    if copied and _read_version(target) != _read_version(NODES_SRC):
+        return "outdated"
+    if "BlenderPass" in object_info:
+        return "loaded"
+    return "restart" if copied else "missing"
+
+
+def install_nodes(comfyui_dir):
+    """Copy the bundled node pack into ComfyUI's custom_nodes. ComfyUI needs a restart afterwards."""
+    if not comfyui_dir or not os.path.isdir(os.path.join(comfyui_dir, "custom_nodes")):
+        raise InstallError("ComfyUI folder not found. Set it in the add-on preferences.")
+    target = os.path.join(comfyui_dir, "custom_nodes", NODES_NAME)
+    shutil.copytree(NODES_SRC, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    return target
+
+
 def target_path(models_dir, entry):
     return os.path.join(models_dir, entry["dir"], entry["name"])
 

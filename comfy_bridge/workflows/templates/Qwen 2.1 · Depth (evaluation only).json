@@ -1,0 +1,1304 @@
+{
+ "id": "Qwen 2.1 \u00b7 Depth (evaluation only).json",
+ "revision": 0,
+ "last_node_id": 42,
+ "last_link_id": 20,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "BlenderPrompt",
+   "pos": [
+    40,
+    60
+   ],
+   "size": [
+    380,
+    172
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "positive",
+     "type": "STRING",
+     "widget": {
+      "name": "positive"
+     },
+     "link": null
+    },
+    {
+     "name": "negative",
+     "type": "STRING",
+     "widget": {
+      "name": "negative"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "STRING",
+     "links": [
+      3
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "negative",
+     "type": "STRING",
+     "links": [
+      4
+     ],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BlenderPrompt"
+   },
+   "widgets_values": [
+    "Photorealistic interior photograph of a modern living room. A grey fabric sofa stands against the back wall, a low oak coffee table in front of it, a tall shelf on the right. Raw concrete walls, warm oak floor, soft daylight, editorial architecture photography.",
+    ""
+   ]
+  },
+  {
+   "id": 3,
+   "type": "BlenderPass",
+   "pos": [
+    40,
+    272
+   ],
+   "size": [
+    380,
+    172
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "pass_type",
+     "type": "COMBO",
+     "widget": {
+      "name": "pass_type"
+     },
+     "link": null
+    },
+    {
+     "name": "image",
+     "type": "STRING",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "links": [
+      8,
+      20
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BlenderPass"
+   },
+   "widgets_values": [
+    "depth",
+    ""
+   ],
+   "title": "Blender Pass \u00b7 Depth"
+  },
+  {
+   "id": 4,
+   "type": "BlenderRenderSize",
+   "pos": [
+    40,
+    484
+   ],
+   "size": [
+    380,
+    112
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": null
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "links": [
+      10
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "links": [
+      11
+     ],
+     "slot_index": 1
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BlenderRenderSize"
+   },
+   "widgets_values": [
+    1024,
+    768
+   ]
+  },
+  {
+   "id": 10,
+   "type": "UNETLoader",
+   "pos": [
+    480,
+    60
+   ],
+   "size": [
+    380,
+    112
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "unet_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "name": "weight_dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      1
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "UNETLoader"
+   },
+   "widgets_values": [
+    "qwen_image_2.1_int8_convrot.safetensors",
+    "default"
+   ]
+  },
+  {
+   "id": 11,
+   "type": "QwenImage21Cache",
+   "pos": [
+    480,
+    212
+   ],
+   "size": [
+    380,
+    138
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 1
+    },
+    {
+     "name": "device",
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    },
+    {
+     "name": "dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "QwenImage21Cache"
+   },
+   "widgets_values": [
+    "auto",
+    "default"
+   ]
+  },
+  {
+   "id": 12,
+   "type": "CLIPLoader",
+   "pos": [
+    480,
+    390
+   ],
+   "size": [
+    380,
+    138
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "clip_name"
+     },
+     "link": null
+    },
+    {
+     "name": "type",
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    },
+    {
+     "name": "device",
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      2
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPLoader"
+   },
+   "widgets_values": [
+    "qwen3vl_8b_int8_convrot.safetensors",
+    "qwen_image",
+    "default"
+   ]
+  },
+  {
+   "id": 13,
+   "type": "VAELoader",
+   "pos": [
+    480,
+    568
+   ],
+   "size": [
+    380,
+    86
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      7,
+      18
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAELoader"
+   },
+   "widgets_values": [
+    "qwen_image_2.1_vae_bf16.safetensors"
+   ]
+  },
+  {
+   "id": 20,
+   "type": "TextEncodeQwenImage21",
+   "pos": [
+    920,
+    60
+   ],
+   "size": [
+    380,
+    276
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 2
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "widget": {
+      "name": "prompt"
+     },
+     "link": 3
+    },
+    {
+     "name": "negative_prompt",
+     "type": "STRING",
+     "widget": {
+      "name": "negative_prompt"
+     },
+     "link": 4
+    },
+    {
+     "name": "resolution",
+     "type": "INT",
+     "widget": {
+      "name": "resolution"
+     },
+     "link": null
+    },
+    {
+     "name": "images",
+     "type": "COMFY_AUTOGROW_V3",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      13
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "links": [
+      14
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "latent",
+     "type": "LATENT",
+     "links": [],
+     "slot_index": 2
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "TextEncodeQwenImage21"
+   },
+   "widgets_values": [
+    "",
+    "",
+    1024
+   ]
+  },
+  {
+   "id": 21,
+   "type": "ModelPatchLoader",
+   "pos": [
+    1360,
+    60
+   ],
+   "size": [
+    380,
+    86
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "name",
+     "type": "COMBO",
+     "widget": {
+      "name": "name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL_PATCH",
+     "type": "MODEL_PATCH",
+     "links": [
+      6
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ModelPatchLoader"
+   },
+   "widgets_values": [
+    "qwen_image_2.1_fun_controlnet_union_int8_convrot.safetensors"
+   ],
+   "title": "ControlNet Union"
+  },
+  {
+   "id": 23,
+   "type": "BlenderSettingFloat",
+   "pos": [
+    1360,
+    186
+   ],
+   "size": [
+    380,
+    224
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "label",
+     "type": "STRING",
+     "widget": {
+      "name": "label"
+     },
+     "link": null
+    },
+    {
+     "name": "value",
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    },
+    {
+     "name": "minimum",
+     "type": "FLOAT",
+     "widget": {
+      "name": "minimum"
+     },
+     "link": null
+    },
+    {
+     "name": "maximum",
+     "type": "FLOAT",
+     "widget": {
+      "name": "maximum"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "value",
+     "type": "FLOAT",
+     "links": [
+      9
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BlenderSettingFloat"
+   },
+   "widgets_values": [
+    "Depth Strength",
+    0.9,
+    0.0,
+    1.5
+   ]
+  },
+  {
+   "id": 22,
+   "type": "QwenImageDiffsynthControlnet",
+   "pos": [
+    1360,
+    450
+   ],
+   "size": [
+    380,
+    268
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 5
+    },
+    {
+     "name": "model_patch",
+     "type": "MODEL_PATCH",
+     "link": 6
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 7
+    },
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 8
+    },
+    {
+     "name": "strength",
+     "type": "FLOAT",
+     "widget": {
+      "name": "strength"
+     },
+     "link": 9
+    },
+    {
+     "name": "mask",
+     "type": "MASK",
+     "link": null
+    },
+    {
+     "name": "start_percent",
+     "type": "FLOAT",
+     "widget": {
+      "name": "start_percent"
+     },
+     "link": null
+    },
+    {
+     "name": "end_percent",
+     "type": "FLOAT",
+     "widget": {
+      "name": "end_percent"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      12
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "QwenImageDiffsynthControlnet"
+   },
+   "widgets_values": [
+    1.0,
+    0.0,
+    1.0
+   ],
+   "title": "Apply Depth"
+  },
+  {
+   "id": 30,
+   "type": "EmptyLatentImage",
+   "pos": [
+    1800,
+    60
+   ],
+   "size": [
+    380,
+    138
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": 10
+    },
+    {
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": 11
+    },
+    {
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      15
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "EmptyLatentImage"
+   },
+   "widgets_values": [
+    1024,
+    1024,
+    1
+   ]
+  },
+  {
+   "id": 32,
+   "type": "BlenderSettingInt",
+   "pos": [
+    1800,
+    238
+   ],
+   "size": [
+    380,
+    224
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "label",
+     "type": "STRING",
+     "widget": {
+      "name": "label"
+     },
+     "link": null
+    },
+    {
+     "name": "value",
+     "type": "INT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    },
+    {
+     "name": "minimum",
+     "type": "INT",
+     "widget": {
+      "name": "minimum"
+     },
+     "link": null
+    },
+    {
+     "name": "maximum",
+     "type": "INT",
+     "widget": {
+      "name": "maximum"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "value",
+     "type": "INT",
+     "links": [
+      16
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "BlenderSettingInt"
+   },
+   "widgets_values": [
+    "Steps",
+    30,
+    1,
+    80
+   ]
+  },
+  {
+   "id": 31,
+   "type": "KSampler",
+   "pos": [
+    1800,
+    502
+   ],
+   "size": [
+    380,
+    320
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 12
+    },
+    {
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": 16
+    },
+    {
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 13
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 14
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 15
+    },
+    {
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      17
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    0,
+    "fixed",
+    30,
+    1.0,
+    "euler",
+    "simple",
+    1.0
+   ]
+  },
+  {
+   "id": 40,
+   "type": "VAEDecode",
+   "pos": [
+    2680,
+    60
+   ],
+   "size": [
+    380,
+    112
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 17
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 18
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      19
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 41,
+   "type": "SaveImage",
+   "pos": [
+    2680,
+    212
+   ],
+   "size": [
+    380,
+    172
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 19
+    },
+    {
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": [],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "comfy_bridge/qwen"
+   ]
+  },
+  {
+   "id": 42,
+   "type": "PreviewImage",
+   "pos": [
+    2680,
+    424
+   ],
+   "size": [
+    380,
+    86
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 20
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": [],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": [],
+   "title": "Control Preview \u00b7 Depth"
+  }
+ ],
+ "links": [
+  [
+   1,
+   10,
+   0,
+   11,
+   0,
+   "MODEL"
+  ],
+  [
+   2,
+   12,
+   0,
+   20,
+   0,
+   "CLIP"
+  ],
+  [
+   3,
+   1,
+   0,
+   20,
+   1,
+   "STRING"
+  ],
+  [
+   4,
+   1,
+   1,
+   20,
+   2,
+   "STRING"
+  ],
+  [
+   5,
+   11,
+   0,
+   22,
+   0,
+   "MODEL"
+  ],
+  [
+   6,
+   21,
+   0,
+   22,
+   1,
+   "MODEL_PATCH"
+  ],
+  [
+   7,
+   13,
+   0,
+   22,
+   2,
+   "VAE"
+  ],
+  [
+   8,
+   3,
+   0,
+   22,
+   3,
+   "IMAGE"
+  ],
+  [
+   9,
+   23,
+   0,
+   22,
+   4,
+   "FLOAT"
+  ],
+  [
+   10,
+   4,
+   0,
+   30,
+   0,
+   "INT"
+  ],
+  [
+   11,
+   4,
+   1,
+   30,
+   1,
+   "INT"
+  ],
+  [
+   12,
+   22,
+   0,
+   31,
+   0,
+   "MODEL"
+  ],
+  [
+   13,
+   20,
+   0,
+   31,
+   6,
+   "CONDITIONING"
+  ],
+  [
+   14,
+   20,
+   1,
+   31,
+   7,
+   "CONDITIONING"
+  ],
+  [
+   15,
+   30,
+   0,
+   31,
+   8,
+   "LATENT"
+  ],
+  [
+   16,
+   32,
+   0,
+   31,
+   2,
+   "INT"
+  ],
+  [
+   17,
+   31,
+   0,
+   40,
+   0,
+   "LATENT"
+  ],
+  [
+   18,
+   13,
+   0,
+   40,
+   1,
+   "VAE"
+  ],
+  [
+   19,
+   40,
+   0,
+   41,
+   0,
+   "IMAGE"
+  ],
+  [
+   20,
+   3,
+   0,
+   42,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "Blender Inputs",
+   "bounding": [
+    20,
+    10,
+    420,
+    606
+   ],
+   "color": "#3f789e",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "Model",
+   "bounding": [
+    460,
+    10,
+    420,
+    664
+   ],
+   "color": "#8A8",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "Prompts",
+   "bounding": [
+    900,
+    10,
+    420,
+    346
+   ],
+   "color": "#a1309b",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 4,
+   "title": "Control",
+   "bounding": [
+    1340,
+    10,
+    420,
+    728
+   ],
+   "color": "#b58b2a",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 5,
+   "title": "Sampler",
+   "bounding": [
+    1780,
+    10,
+    420,
+    832
+   ],
+   "color": "#88A",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 7,
+   "title": "Output",
+   "bounding": [
+    2660,
+    10,
+    420,
+    520
+   ],
+   "color": "#444",
+   "font_size": 24,
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.6,
+   "offset": [
+    40,
+    40
+   ]
+  },
+  "comfy_bridge": {
+   "description": "Qwen-Image 2.1 with ControlNet Union on Blender depth. License qwen-research: evaluation only, no commercial use.",
+   "packages": [
+    "qwen_image_21_depth"
+   ],
+   "nodes": [
+    "BlenderPass",
+    "BlenderPrompt",
+    "BlenderRenderSize",
+    "BlenderSettingFloat",
+    "BlenderSettingInt"
+   ],
+   "required_nodes": [
+    "BlenderPass",
+    "BlenderPrompt",
+    "BlenderRenderSize",
+    "BlenderSettingFloat",
+    "BlenderSettingInt",
+    "CLIPLoader",
+    "EmptyLatentImage",
+    "KSampler",
+    "ModelPatchLoader",
+    "PreviewImage",
+    "QwenImage21Cache",
+    "QwenImageDiffsynthControlnet",
+    "SaveImage",
+    "TextEncodeQwenImage21",
+    "UNETLoader",
+    "VAEDecode",
+    "VAELoader"
+   ]
+  }
+ },
+ "version": 0.4
+}

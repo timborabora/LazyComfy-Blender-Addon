@@ -14,6 +14,9 @@ download = None        # installer.Download while one is running
 download_message = ""  # last download result for the panel
 
 # Blender requires strings of dynamic enum items to stay referenced.
+comfy_workflows = {}   # "comfy:<path>" -> {"ui": saved workflow}
+comfy_index = []       # [(ident, label, has_selection)] of saved workflows with Blender nodes
+examples_message = ""
 workflow_items = []
 edit_workflow_items = []
 package_items = []

@@ -1,19 +1,47 @@
+import os
+
 import bpy
 
 from . import state
 
 
-def _draw_param(layout, p):
+def _draw_param(layout, p, text=None):
+    text = p.label if text is None else text
     if p.kind == "ENUM":
-        layout.prop(p, "enum_v", text=p.label)
+        layout.prop(p, "enum_v", text=text)
     elif p.kind == "INT":
-        layout.prop(p, "int_v", text=p.label)
+        layout.prop(p, "int_v", text=text)
     elif p.kind == "FLOAT":
-        layout.prop(p, "float01_v" if p.unit_range else "float_v", text=p.label, slider=p.unit_range)
+        layout.prop(p, "float01_v" if p.unit_range else "float_v", text=text, slider=p.unit_range)
     elif p.kind == "BOOLEAN":
-        layout.prop(p, "bool_v", text=p.label)
+        layout.prop(p, "bool_v", text=text)
     else:
-        layout.prop(p, "str_v", text=p.label)
+        layout.prop(p, "str_v", text=text)
+
+
+def _draw_dependencies(layout, s):
+    from . import installer
+    for pkg_id in filter(None, s.missing_packages.split(",")):
+        pkg = installer.package(pkg_id)
+        if not pkg:
+            continue
+        from . import operators
+        _, todo = installer.status(operators.models_dir(), pkg)
+        row = layout.row(align=True)
+        row.alert = True
+        row.label(text=f"Missing: {pkg['name']} ({installer.human_size(todo)})", icon="ERROR")
+        op = row.operator("comfy_bridge.install_package", text="Install", icon="IMPORT")
+        op.package_id = pkg_id
+    missing = [n for n in s.missing_nodes.split(",") if n]
+    if any(n.startswith("Blender") for n in missing):
+        row = layout.row(align=True)
+        row.alert = True
+        row.label(text="Blender nodes not loaded in ComfyUI", icon="ERROR")
+        row.operator("comfy_bridge.install_nodes", text="Install", icon="IMPORT")
+    others = [n for n in missing if not n.startswith("Blender")]
+    if others:
+        layout.label(text="Missing ComfyUI nodes: " + ", ".join(others[:4]) + (" …" if len(others) > 4 else ""),
+                     icon="ERROR")
 
 
 class _Sub:
@@ -35,45 +63,57 @@ class CB_PT_main(bpy.types.Panel):
         s = context.scene.comfy_bridge
 
         # Connection
-        box = layout.box()
-        row = box.row(align=True)
+        row = layout.row(align=True)
         if state.connecting:
             row.label(text="Connecting …", icon="SORTTIME")
         elif state.server:
             version = (state.stats or {}).get("system", {}).get("comfyui_version", "")
             row.label(text=f"Connected  ·  ComfyUI {version}", icon="CHECKMARK")
         else:
-            row.label(text="Not connected", icon="ERROR")
+            row.label(text="Not connected – start Comfy Desktop", icon="ERROR")
         row.operator("comfy_bridge.connect", text="", icon="FILE_REFRESH", emboss=False)
-
-        layout.separator(factor=0.5)
 
         # Workflow
         box = layout.box()
-        box.label(text="Workflow", icon="NODETREE")
         row = box.row(align=True)
         row.prop(s, "workflow", text="")
         row.operator("comfy_bridge.reload_workflows", text="", icon="FILE_REFRESH")
-        row.operator("comfy_bridge.open_folder", text="", icon="FILE_FOLDER").which = "WORKFLOWS"
         if s.workflow_info:
             box.label(text=s.workflow_info, icon="INFO")
+        _draw_dependencies(box, s)
         for line in s.workflow_warnings.splitlines():
             box.label(text=line, icon="ERROR")
 
-        layout.separator(factor=0.5)
+        # Prompt and the workflow's Blender settings
+        prompts = [p for p in s.params if p.section == "prompt"]
+        if prompts:
+            col = layout.column()
+            for p in prompts:
+                col.label(text=p.label + ":")
+                col.prop(p, "str_v", text="")
+        settings = [p for p in s.params if p.section == "setting"]
+        if settings:
+            col = layout.column(align=True)
+            col.use_property_split = True
+            col.use_property_decorate = False
+            for p in settings:
+                _draw_param(col, p)
 
-        # Actions
+        layout.separator(factor=0.5)
         col = layout.column()
         col.scale_y = 1.8
         col.operator("comfy_bridge.render_send", icon="RENDER_STILL")
-        layout.separator(factor=0.3)
-        col = layout.column()
-        col.scale_y = 1.3
-        col.operator("comfy_bridge.send", icon="EXPORT")
+        layout.operator("comfy_bridge.send", icon="EXPORT")
+
+        if s.workflow_can_edit or state.edit_workflow_items:
+            layout.separator(factor=0.5)
+            row = layout.row(align=True)
+            row.prop(s, "edit_prompt", text="", placeholder="Change, e.g. green velvet sofa", icon="GREASEPENCIL")
+            sub = row.row(align=True)
+            sub.scale_x = 0.9
+            sub.operator("comfy_bridge.edit_selection", text="Redo Selection", icon="SELECT_SET")
 
         layout.separator(factor=0.5)
-
-        # Status
         if s.running:
             row = layout.row(align=True)
             row.progress(factor=s.progress, text=s.status)
@@ -90,79 +130,33 @@ class CB_PT_main(bpy.types.Panel):
             row.operator("comfy_bridge.open_folder", text="", icon="FILE_FOLDER", emboss=False).which = "OUTPUT"
 
 
-class CB_PT_prompts(_Sub, bpy.types.Panel):
-    bl_label = "Prompts"
-
-    @classmethod
-    def poll(cls, context):
-        return any(p.section == "prompt" for p in context.scene.comfy_bridge.params)
-
-    def draw(self, context):
-        layout = self.layout
-        for p in context.scene.comfy_bridge.params:
-            if p.section == "prompt":
-                layout.label(text=p.label + ":")
-                layout.prop(p, "str_v", text="")
-                layout.separator(factor=0.5)
-
-
 class CB_PT_object_prompts(_Sub, bpy.types.Panel):
     bl_label = "Object Prompts"
 
     @classmethod
     def poll(cls, context):
-        return context.scene.comfy_bridge.region_slots > 0
+        s = context.scene.comfy_bridge
+        return s.region_slots > 0 or "object prompts" in s.workflow_info
 
     def draw(self, context):
         from . import operators
         layout = self.layout
         s = context.scene.comfy_bridge
         objs = operators.prompt_objects(context.scene, context.view_layer)
-        over = len(objs) > s.region_slots
-        layout.label(text=f"{min(len(objs), s.region_slots)} of {s.region_slots} slots used",
-                     icon="ERROR" if over else "OBJECT_DATAMODE")
+        limit = s.region_slots or len(objs)
+        if s.region_slots:
+            layout.label(text=f"{min(len(objs), limit)} of {limit} slots used",
+                         icon="ERROR" if len(objs) > limit else "OBJECT_DATAMODE")
         col = layout.column(align=True)
         for i, o in enumerate(objs):
             row = col.row(align=True)
-            row.active = i < s.region_slots
+            row.active = i < limit
             row.label(text=o.name, icon="OBJECT_DATA")
             row.prop(o, "comfy_prompt", text="")
         if not objs:
             layout.label(text="Set prompts in Object Properties › Comfy Bridge")
-        layout.separator(factor=0.5)
-        layout.prop(s, "region_strength", slider=True)
-
-
-class CB_PT_edit(_Sub, bpy.types.Panel):
-    bl_label = "Edit Selection"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        import os
-        layout = self.layout
-        s = context.scene.comfy_bridge
-        layout.prop(s, "edit_workflow", text="")
-        layout.prop(s, "edit_prompt", text="", placeholder="e.g. green velvet sofa")
-        row = layout.row(align=True)
-        row.prop(s, "edit_grow", text="Grow")
-        row.prop(s, "edit_feather", text="Feather")
-        col = layout.column()
-        col.scale_y = 1.4
-        col.operator("comfy_bridge.edit_selection", icon="SELECT_SET")
-        if s.last_result:
-            layout.label(text=f"From: {os.path.basename(s.last_result)}  ·  seed {s.last_seed}", icon="IMAGE_DATA")
-        else:
-            layout.label(text="Render & Send first", icon="INFO")
-
-
-class CB_PT_object(bpy.types.Panel):
-    bl_label = "Comfy Bridge"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "object"
-
-    def draw(self, context):
-        self.layout.prop(context.object, "comfy_prompt", text="Prompt")
+        if s.region_slots:
+            layout.prop(s, "region_strength", slider=True)
 
 
 class CB_PT_models(_Sub, bpy.types.Panel):
@@ -209,10 +203,28 @@ class CB_PT_advanced(_Sub, bpy.types.Panel):
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
+        from . import installer, operators
         layout = self.layout
+        s = context.scene.comfy_bridge
+
+        box = layout.box()
+        box.label(text="ComfyUI", icon="NODETREE")
+        status = installer.nodes_status(operators.comfyui_dir(), state.object_info) if state.server else ""
+        text = {"loaded": "Blender nodes loaded", "restart": "Blender nodes copied – restart ComfyUI",
+                "outdated": "Blender nodes outdated", "missing": "Blender nodes not installed"}.get(status, "")
+        row = box.row(align=True)
+        if text:
+            row.label(text=text, icon="CHECKMARK" if status == "loaded" else "ERROR")
+        row.operator("comfy_bridge.install_nodes", text="Install" if status != "loaded" else "Reinstall")
+        row = box.row(align=True)
+        row.operator("comfy_bridge.install_examples", icon="DUPLICATE")
+        row.operator("comfy_bridge.open_folder", text="", icon="FILE_FOLDER").which = "WORKFLOWS"
+        if state.examples_message:
+            box.label(text=state.examples_message, icon="INFO")
+        box.label(text="Tip: copy an example with Save As before you change it.")
+
         layout.use_property_split = True
         layout.use_property_decorate = False
-        s = context.scene.comfy_bridge
         needed = s.workflow_needed.split(",") if s.workflow_needed else []
         col = layout.column(heading="Passes")
         for key, label in (("beauty", "Beauty"), ("depth", "Depth"), ("normal", "Normal"), ("lineart", "Line Art")):
@@ -220,6 +232,14 @@ class CB_PT_advanced(_Sub, bpy.types.Panel):
                 col.label(text=f"{label} (used by workflow)", icon="CHECKBOX_HLT")
             else:
                 col.prop(s, "extra_" + key)
+        layout.separator()
+        col = layout.column(heading="Redo Selection")
+        col.prop(s, "edit_grow")
+        col.prop(s, "edit_feather")
+        if not s.workflow_can_edit and state.edit_workflow_items:
+            col.prop(s, "edit_workflow", text="Edit Workflow")
+        if s.last_result:
+            col.label(text=f"From: {os.path.basename(s.last_result)}  ·  seed {s.last_seed}")
         layout.separator()
         col = layout.column()
         col.prop(s, "normal_flip_x")
@@ -274,8 +294,18 @@ class CB_PT_packages(_Sub, bpy.types.Panel):
             layout.label(text=state.download_message, icon="INFO")
 
 
-classes = (CB_PT_main, CB_PT_prompts, CB_PT_object_prompts, CB_PT_edit, CB_PT_models, CB_PT_settings,
-           CB_PT_advanced, CB_PT_packages, CB_PT_object)
+class CB_PT_object(bpy.types.Panel):
+    bl_label = "Comfy Bridge"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "object"
+
+    def draw(self, context):
+        self.layout.prop(context.object, "comfy_prompt", text="Prompt")
+
+
+classes = (CB_PT_main, CB_PT_object_prompts, CB_PT_models, CB_PT_settings, CB_PT_advanced, CB_PT_packages,
+           CB_PT_object)
 
 
 def register():

@@ -86,7 +86,31 @@ def is_edit_workflow(path):
         return False
 
 
-def load(path):
+COMFY_PREFIX = "comfy:"
+BLENDER_SETTINGS = {"BlenderSettingFloat": "FLOAT", "BlenderSettingInt": "INT", "BlenderSettingBool": "BOOLEAN"}
+
+
+def has_blender_nodes(ui):
+    return any(str(n.get("type", "")).startswith("Blender") for n in ui.get("nodes", []))
+
+
+def load(path, fresh=False):
+    """API-format workflow. `comfy:<path>` = saved in ComfyUI (UI format, converted here);
+    anything else is an API-format JSON file. `fresh` re-reads the ComfyUI file first."""
+    if path.startswith(COMFY_PREFIX):
+        from . import state, templates, ui_convert
+        rel = path[len(COMFY_PREFIX):]
+        entry = state.comfy_workflows.get(path)
+        if (fresh or entry is None) and state.server:
+            ui = templates.fetch_workflow(state.server, rel)
+            if ui is not None:
+                entry = state.comfy_workflows[path] = {"ui": ui}
+        if entry is None:
+            raise WorkflowError(f"Workflow '{rel}' not found in ComfyUI. Reconnect or save it again.")
+        try:
+            return ui_convert.convert(entry["ui"], state.object_info)
+        except ui_convert.ConvertError as e:
+            raise WorkflowError(str(e)) from e
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -126,6 +150,9 @@ def analyze(workflow, object_info):
         "prev_nodes": [],  # BL:result_prev – previous result for editing
         "selection_nodes": [],
         "edit_prompt_nodes": [],
+        "object_nodes": [],         # BlenderObjectPrompts
+        "blender_selection": [],    # BlenderSelection
+        "node_based": False,        # uses Comfy Bridge nodes instead of title conventions
     }
     classes = {n["class_type"] for n in workflow.values()}
     if any(c.startswith(("QwenImage", "TextEncodeQwenImage")) for c in classes):
@@ -142,6 +169,28 @@ def analyze(workflow, object_info):
         title = title_of(node).strip()
         inputs = node.get("inputs", {})
         low = title.lower()
+
+        if cls.startswith("Blender"):
+            result["node_based"] = True
+            if cls == "BlenderPass":
+                result["images"].setdefault(inputs.get("pass_type", "beauty"), []).append(node_id)
+            elif cls == "BlenderPrompt":
+                for name, label in (("positive", "Prompt"), ("negative", "Negative")):
+                    if not is_link(inputs.get(name)):
+                        result["params"].append(_param(node_id, cls, name, label, "prompt", "STRING",
+                                                       inputs.get(name, ""), {"multiline": True}))
+            elif cls in BLENDER_SETTINGS:
+                kind = BLENDER_SETTINGS[cls]
+                opts = {} if kind == "BOOLEAN" else {"min": inputs.get("minimum"), "max": inputs.get("maximum")}
+                result["params"].append(_param(node_id, cls, "value", str(inputs.get("label") or "Setting"),
+                                               "setting", kind, inputs.get("value"), opts))
+            elif cls == "BlenderRenderSize":
+                result["size_nodes"].append(node_id)
+            elif cls == "BlenderObjectPrompts":
+                result["object_nodes"].append(node_id)
+            elif cls == "BlenderSelection":
+                result["blender_selection"].append(node_id)
+            continue
 
         if low.startswith("bl:"):
             tag = low[3:].strip()
@@ -209,13 +258,13 @@ def analyze(workflow, object_info):
                 label = f"{label_base} · {_pretty(name)}"
             result["params"].append(_param(node_id, cls, name, label, section, kind, value, opts))
 
-    if not result["size_nodes"]:
+    if not result["size_nodes"] and not result["node_based"]:
         result["size_nodes"] = empty_latents
     for n, slot in sorted(result["regions"].items()):
         if set(slot) != {"apply", "mask", "prompt"}:
             result["warnings"].append(f"Region {n} needs BL:region_{n}, BL:region_{n}_mask and BL:region_{n}_prompt.")
     result["regions"] = {n: s for n, s in result["regions"].items() if set(s) == {"apply", "mask", "prompt"}}
-    if not result["images"] and not result["prev_nodes"]:
+    if not result["images"] and not result["prev_nodes"] and not result["node_based"]:
         result["warnings"].append("No BL:beauty / BL:depth / … node – the workflow gets no image from Blender.")
     return result
 
@@ -257,6 +306,10 @@ def describe(analysis):
     parts.append(", ".join(names) if names else "no Blender input")
     if analysis["regions"]:
         parts.append(f"{len(analysis['regions'])} object prompts")
+    elif analysis["object_nodes"]:
+        parts.append("object prompts")
+    if analysis["blender_selection"]:
+        parts.append("Redo Selection")
     return "  ·  ".join(parts)
 
 

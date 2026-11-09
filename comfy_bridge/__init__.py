@@ -31,6 +31,11 @@ class CB_Preferences(bpy.types.AddonPreferences):
         description="Where model packages are installed. Empty = models folder from Comfy Desktop's settings",
         subtype="DIR_PATH",
     )
+    comfyui_dir: bpy.props.StringProperty(
+        name="ComfyUI Folder",
+        description="ComfyUI folder that holds custom_nodes (for the Blender nodes). Empty = active Comfy Desktop installation",
+        subtype="DIR_PATH",
+    )
     hf_token: bpy.props.StringProperty(
         name="Hugging Face Token",
         description="Only needed for gated models. Stored in Blender's preferences, never in .blend files",
@@ -44,6 +49,7 @@ class CB_Preferences(bpy.types.AddonPreferences):
         layout.prop(self, "output_dir")
         layout.separator()
         layout.prop(self, "models_dir")
+        layout.prop(self, "comfyui_dir")
         layout.prop(self, "hf_token")
 
 

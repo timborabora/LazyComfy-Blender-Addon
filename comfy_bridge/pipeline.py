@@ -22,7 +22,7 @@ class Job:
         self.base = base
         self.workflow = workflow
         self.client_id = client_id
-        self.uploads = uploads          # [(pfad, dateiname, [node_ids])]
+        self.uploads = uploads          # [(path, file name, [node_ids], optional input name)]
         self.out_dir = out_dir
         self.result_nodes = result_nodes
         self.status = "Starting …"
@@ -45,11 +45,11 @@ class Job:
     def run(self):
         ws = None
         try:
-            for path, name, node_ids in self.uploads:
+            for path, name, node_ids, *field in self.uploads:
                 self.status = f"Uploading {name} …"
                 value = comfy_client.upload_image(self.base, path, name)
                 for nid in node_ids:
-                    self.workflow[nid]["inputs"]["image"] = value
+                    self.workflow[nid]["inputs"][field[0] if field else "image"] = value
             try:
                 ws = comfy_client.WebSocket(self.base, self.client_id)
             except (ComfyError, OSError):
