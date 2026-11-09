@@ -22,31 +22,45 @@ class PassError(RuntimeError):
     pass
 
 
+def rendered_layers(scene, view_layer):
+    """View Layers, die beim nächsten Render tatsächlich gerechnet werden."""
+    if scene.render.use_single_layer:
+        return [view_layer]
+    return [vl for vl in scene.view_layers if vl.use] or [view_layer]
+
+
 def prepare_scene(scene, view_layer, needed):
-    """Schaltet die für `needed` nötigen Pässe ein. Rückgabe: Werte zum Zurücksetzen."""
+    """Schaltet die für `needed` nötigen Pässe auf allen gerenderten View Layers ein.
+
+    Nur die aktive Layer reicht nicht: Ist bei ihr „Use for Rendering“ aus,
+    landet ihr Pass nie im Render. Rückgabe: Werte zum Zurücksetzen.
+    """
     saved = {}
 
     def setattr_saved(obj, attr, value, key):
         saved[key] = (obj, attr, getattr(obj, attr))
         setattr(obj, attr, value)
 
-    if "depth" in needed:
-        setattr_saved(view_layer, "use_pass_z", True, "z")
-    if "normal" in needed:
-        setattr_saved(view_layer, "use_pass_normal", True, "normal")
-    if any(k.startswith("mask:") for k in needed):
-        setattr_saved(view_layer, "use_pass_cryptomatte_object", True, "crypto")
     if "lineart" in needed:
         setattr_saved(scene.render, "use_freestyle", True, "freestyle")
-        setattr_saved(view_layer, "use_freestyle", True, "vl_freestyle")
-        setattr_saved(view_layer.freestyle_settings, "as_render_pass", True, "fs_pass")
-        # Ein LineSet ohne Linienstil zeichnet nichts („strokes set empty“)
-        fs = view_layer.freestyle_settings
-        if not fs.linesets:
-            fs.linesets.new("CB Linien")
-        for lineset in fs.linesets:
-            if lineset.linestyle is None:
-                lineset.linestyle = bpy.data.linestyles.get("CB Linien") or bpy.data.linestyles.new("CB Linien")
+    for vl in rendered_layers(scene, view_layer):
+        n = vl.name
+        if "depth" in needed:
+            setattr_saved(vl, "use_pass_z", True, n + ":z")
+        if "normal" in needed:
+            setattr_saved(vl, "use_pass_normal", True, n + ":normal")
+        if any(k.startswith("mask:") for k in needed):
+            setattr_saved(vl, "use_pass_cryptomatte_object", True, n + ":crypto")
+        if "lineart" in needed:
+            setattr_saved(vl, "use_freestyle", True, n + ":vl_freestyle")
+            setattr_saved(vl.freestyle_settings, "as_render_pass", True, n + ":fs_pass")
+            # Ein LineSet ohne Linienstil zeichnet nichts („strokes set empty“)
+            fs = vl.freestyle_settings
+            if not fs.linesets:
+                fs.linesets.new("CB Linien")
+            for lineset in fs.linesets:
+                if lineset.linestyle is None:
+                    lineset.linestyle = bpy.data.linestyles.get("CB Linien") or bpy.data.linestyles.new("CB Linien")
     return saved
 
 
@@ -113,6 +127,12 @@ def _part(parts, view_layer_name, pass_name):
         if name.endswith("." + pass_name):
             return arr
     return None
+
+
+def _missing(pass_name, parts):
+    layers = sorted({name.rsplit(".", 1)[0] for name in parts if "." in name}) or ["?"]
+    return (f"{pass_name}-Pass fehlt im Render (gerendert: {', '.join(layers)}). "
+            "Mit „Rendern & senden“ neu rendern – „Letzten Render senden“ nutzt nur, was schon da ist.")
 
 
 def depth_image(z):
@@ -228,19 +248,19 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
         if key == "depth":
             z = _part(parts, vl, "Depth")
             if z is None:
-                raise PassError("Depth-Pass fehlt im Render – mit „Rendern & senden“ neu rendern.")
+                raise PassError(_missing("Depth", parts))
             write_png(path, depth_image(z))
         elif key == "normal":
             n = _part(parts, vl, "Normal")
             if n is None:
-                raise PassError("Normal-Pass fehlt im Render – mit „Rendern & senden“ neu rendern.")
+                raise PassError(_missing("Normal", parts))
             if scene.camera is None:
                 raise PassError("Szene hat keine Kamera.")
             write_png(path, normal_image(n, scene.camera, flip_normal_x))
         elif key == "lineart":
             fs = _part(parts, vl, "Freestyle")
             if fs is None:
-                raise PassError("Line-Art-Pass fehlt – mit „Rendern & senden“ neu rendern (Freestyle wird dabei aktiviert).")
+                raise PassError(_missing("Freestyle", parts))
             write_png(path, lineart_image(fs))
         elif key.startswith("mask:"):
             name = key[5:]
