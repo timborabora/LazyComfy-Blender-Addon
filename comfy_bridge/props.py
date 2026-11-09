@@ -23,9 +23,14 @@ def workflow_folders(context=None):
 
 def refresh_workflow_items(context=None):
     """Saved ComfyUI workflows with Blender nodes first, then API-format files (fallback)."""
-    found = workflows.scan(workflow_folders(context))
-    comfy = [(ident, label, "Saved in ComfyUI: " + ident[len(workflows.COMFY_PREFIX):])
-             for ident, label, _ in state.comfy_index]
+    prefs = _addon_prefs(context)
+    found = workflows.scan(workflow_folders(context)) if prefs and prefs.show_api_files else []
+    names = [os.path.basename(label) for _, label, _ in state.comfy_index]
+    comfy = []
+    for (ident, label, _), name in zip(state.comfy_index, names):
+        folder = os.path.dirname(label)
+        shown = name if names.count(name) == 1 or not folder else f"{name}  ({folder})"
+        comfy.append((ident, shown, "Saved in ComfyUI: Workflows/" + ident[len(workflows.COMFY_PREFIX):]))
     api_main = [(p, label + "  [API file]", p) for p, label, _ in found if not workflows.is_edit_workflow(p)]
     api_edit = [(p, label + "  [API file]", p) for p, label, _ in found if workflows.is_edit_workflow(p)]
     state.workflow_items = comfy + api_main

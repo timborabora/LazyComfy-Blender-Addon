@@ -16,6 +16,7 @@ BLEND = argv[1] if len(argv) > 1 else os.path.join(os.path.dirname(__file__), ".
 
 mod_name = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("comfy_bridge"))
 addon_utils.enable(mod_name, default_set=True)
+bpy.context.preferences.addons[mod_name].preferences.show_api_files = True  # old API-file examples
 cb = sys.modules[mod_name]
 ops = sys.modules[mod_name + ".operators"]
 st = sys.modules[mod_name + ".state"]

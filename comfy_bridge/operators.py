@@ -675,6 +675,33 @@ class CB_OT_cancel(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CB_OT_edit_prompt(bpy.types.Operator):
+    bl_idname = "comfy_bridge.edit_prompt"
+    bl_label = "Edit Prompt"
+    bl_description = "Edit the prompt in a large window"
+    key: bpy.props.StringProperty(options={"HIDDEN"})
+
+    def _param(self, context):
+        return next((p for p in context.scene.comfy_bridge.params if p.key == self.key), None)
+
+    def invoke(self, context, event):
+        if self._param(context) is None:
+            return {"CANCELLED"}
+        return context.window_manager.invoke_props_dialog(self, width=820, title=self._param(context).label)
+
+    def draw(self, context):
+        import textwrap
+        p = self._param(context)
+        self.layout.prop(p, "str_v", text="")
+        col = self.layout.column(align=True)
+        col.scale_y = 0.8
+        for line in textwrap.wrap(p.str_v, 120) or [""]:
+            col.label(text=line)
+
+    def execute(self, context):
+        return {"FINISHED"}
+
+
 class CB_OT_show_text(bpy.types.Operator):
     bl_idname = "comfy_bridge.show_error"
     bl_label = "Show Message"
@@ -887,6 +914,7 @@ classes = (
     CB_OT_edit_selection,
     CB_OT_send,
     CB_OT_cancel,
+    CB_OT_edit_prompt,
     CB_OT_show_text,
 )
 

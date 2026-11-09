@@ -4,10 +4,13 @@ Blender-Add-on (ab 5.0): Blender rendert, ComfyUI rechnet. Render und Render-Pä
 
 Das Panel sitzt unter **Render Properties → Comfy Bridge** und ist auf Englisch:
 
-- oben Verbindung und Workflow, darunter Prompt und die Regler des Workflows
-- **Render & Generate**, **Send Last Render**
-- das Feld „Change“ mit **Redo Selection**
-- einklappbar: **Object Prompts**, **Models**, **Settings**, **Advanced**, **Model Packages**
+- im Kopf ein grüner bzw. roter Punkt für die Verbindung und ↻
+- Workflow (darunter nur ein Hinweis, wenn etwas fehlt), Prompt (✎ öffnet ein großes Eingabefenster), Negativ-Prompt eingeklappt, die Regler des Workflows
+- **Render & Generate** mit Würfel: an = jeder Render bekommt einen neuen Seed
+- nach dem ersten Ergebnis: Feld „Change“ mit **Redo Selection** und die Statuszeile mit Ordner-Knopf
+- einklappbar: **Object Prompts** (wenn der Workflow sie kann) und **Advanced** mit Models, Render & Seed (auch **Send Last Render**), Redo Selection, Model Packages und ComfyUI (Nodes, Beispiele)
+
+Die alten API-Dateien erscheinen nur, wenn „Show API Files“ in den Add-on-Einstellungen an ist.
 
 In Blender passiert nur, was Blender weiß: Objekte, Masken, Kamera, Pässe. Die Bildarbeit (Modelle, ControlNets, Sampler, LoRAs, Upscaler) bleibt im ComfyUI-Workflow.
 

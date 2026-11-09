@@ -21,6 +21,11 @@ class CB_Preferences(bpy.types.AddonPreferences):
         description="Folder with your own workflows (API JSON). The bundled examples stay available",
         subtype="DIR_PATH",
     )
+    show_api_files: bpy.props.BoolProperty(
+        name="Show API Files",
+        description="Also list API-format JSON files (old BL:/UI: title convention) in the workflow menu",
+        update=lambda self, ctx: props.refresh_workflow_items(ctx) and None,
+    )
     output_dir: bpy.props.StringProperty(
         name="Output Folder",
         description="Empty = folder 'comfy_bridge_output' next to the .blend file (or temp if unsaved)",
@@ -45,6 +50,7 @@ class CB_Preferences(bpy.types.AddonPreferences):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "server_url")
+        layout.prop(self, "show_api_files")
         layout.prop(self, "workflow_dir")
         layout.prop(self, "output_dir")
         layout.separator()
