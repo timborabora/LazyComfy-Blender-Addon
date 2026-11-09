@@ -6,7 +6,7 @@ name = "Comfy Bridge"
 tagline = "Send Blender renders and render passes to ComfyUI"
 maintainer = "Tim Jagodka <tim@studioborabora.com>"
 type = "add-on"
-website = "https://github.com/"
+website = "https://github.com/timborabora/comfy_bridge"
 
 tags = ["Render"]
 

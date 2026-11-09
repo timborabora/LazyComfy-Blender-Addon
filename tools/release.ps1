@@ -1,7 +1,7 @@
 # Baut die Extension, erzeugt den Extension-Index und legt ein GitHub-Release an.
 #
 # Blender holt Updates über diese Repository-URL (einmalig in Blender eintragen):
-#   https://github.com/<owner>/comfy_bridge/releases/latest/download/index.json
+#   https://github.com/timborabora/comfy_bridge/releases/latest/download/index.json
 # Preferences > Get Extensions > Repositories > + > Add Remote Repository,
 # „Check for Updates on Startup“ anhaken.
 #
