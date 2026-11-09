@@ -2,7 +2,13 @@
 
 Blender-Add-on (ab 5.0): Blender rendert, ComfyUI rechnet. Render und Render-Pässe gehen mit einem Klick an das lokale ComfyUI, das Ergebnis landet im Image Editor.
 
-Das Panel sitzt unter **Render Properties → Comfy Bridge**.
+Das Panel sitzt unter **Render Properties → Comfy Bridge** und hat drei Bereiche:
+
+- **Quick**: Verbindung, Workflow, Prompt, Seed, Senden-Knopf und Fortschritt. Mehr braucht der tägliche Ablauf nicht.
+- **Workflow**: Modell-Dropdowns und die `UI:`-Regler des gewählten Workflows.
+- **Advanced** (zugeklappt): zusätzliche Pässe, Normal-Konvention, Anzeige-Optionen, Modellfilter.
+
+Mehrere ControlNets oder andere Modelle (Qwen-Image usw.) brauchen keinen Add-on-Code. Das regelt allein der Workflow.
 
 ## Ablauf
 
