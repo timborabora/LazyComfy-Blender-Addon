@@ -95,8 +95,20 @@ def _read_exr(path):
     k = 0
     while inp.seek_subimage(k, 0):
         spec = inp.spec()
-        name = spec.getattribute("name") or f"part{k}"
-        parts[name] = (list(spec.channelnames), inp.read_image(format="float"))
+        channels = list(spec.channelnames)
+        pixels = inp.read_image(format="float")
+        name = spec.getattribute("name")
+        if name and not any(c.count(".") >= 2 for c in channels):
+            parts[name] = (channels, pixels)
+        else:
+            # Interleaved (alles in einem Teil, z.B. „Interleave“ an oder Cycles-Denoising):
+            # Kanäle „ViewLayer.Depth.Z“ nach „ViewLayer.Depth“ gruppieren.
+            groups = {}
+            for idx, ch in enumerate(channels):
+                key = ch.rsplit(".", 1)[0] if "." in ch else (name or f"part{k}")
+                groups.setdefault(key, []).append(idx)
+            for key, idxs in groups.items():
+                parts[key] = ([channels[i] for i in idxs], pixels[:, :, idxs])
         for a in spec.extra_attribs:
             attribs[a.name] = a.value
         k += 1
