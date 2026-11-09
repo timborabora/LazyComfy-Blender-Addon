@@ -11,6 +11,8 @@ param(
     [switch]$DryRun
 )
 $ErrorActionPreference = "Stop"
+$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+if (-not $gh) { $gh = "C:\Program Files\GitHub CLI\gh.exe" }
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
 $version = (Select-String -Path (Join-Path $root "comfy_bridge\blender_manifest.toml") -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
@@ -27,4 +29,4 @@ if ($DryRun) { Write-Host "DryRun: kein Release angelegt."; exit 0 }
 
 git -C $root tag "v$version"
 git -C $root push origin "v$version"
-gh release create "v$version" $zip.FullName (Join-Path $dist "index.json") --repo (git -C $root remote get-url origin) --title "Comfy Bridge $version" --notes "Comfy Bridge $version"
+& $gh release create "v$version" $zip.FullName (Join-Path $dist "index.json") --repo (git -C $root remote get-url origin) --title "Comfy Bridge $version" --notes "Comfy Bridge $version"

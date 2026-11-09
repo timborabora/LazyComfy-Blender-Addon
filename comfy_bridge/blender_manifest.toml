@@ -4,7 +4,7 @@ id = "comfy_bridge"
 version = "0.1.0"
 name = "Comfy Bridge"
 tagline = "Send Blender renders and render passes to ComfyUI"
-maintainer = "Tim Jagodka <tim@studioborabora.com>"
+maintainer = "Tim Jagodka"
 type = "add-on"
 website = "https://github.com/timborabora/comfy_bridge"
 
