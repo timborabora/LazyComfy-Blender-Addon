@@ -31,7 +31,7 @@ def refresh_workflow_items(context=None):
 def _workflow_items(self, context):
     if not state.workflow_items:
         refresh_workflow_items(context)
-    return state.workflow_items or [("", "– kein Workflow gefunden –", "")]
+    return state.workflow_items or [("", "No workflow found", "")]
 
 
 def _on_workflow_changed(self, context):
@@ -46,10 +46,10 @@ def _param_enum_items(self, context):
     items = []
     available = set(state.enum_item_cache.get(("all", self.key), options))
     for o in options:
-        label = o if o in available else f"{o}  (fehlt in ComfyUI!)"
+        label = o if o in available else f"{o}  (missing in ComfyUI!)"
         items.append((o, label, o))
     if not items:
-        items = [("", "– keine Auswahl –", "")]
+        items = [("", "Nothing to choose", "")]
     state.enum_item_cache[("items", self.key)] = items
     return items
 
@@ -72,14 +72,14 @@ class CB_Param(bpy.types.PropertyGroup):
     has_max: bpy.props.BoolProperty()
     min_v: bpy.props.FloatProperty()
     max_v: bpy.props.FloatProperty()
-    unit_range: bpy.props.BoolProperty(description="Wert liegt zwischen 0 und 1 – als Schieberegler zeigen")
+    unit_range: bpy.props.BoolProperty(description="Value is between 0 and 1 – shown as a slider")
 
-    int_v: bpy.props.IntProperty(name="Wert")
-    float_v: bpy.props.FloatProperty(name="Wert", precision=3, step=10)
-    float01_v: bpy.props.FloatProperty(name="Wert", min=0.0, max=1.0, precision=2, subtype="FACTOR")
-    bool_v: bpy.props.BoolProperty(name="Wert")
-    str_v: bpy.props.StringProperty(name="Wert")
-    enum_v: bpy.props.EnumProperty(name="Wert", items=_param_enum_items, update=_on_enum_changed)
+    int_v: bpy.props.IntProperty(name="Value")
+    float_v: bpy.props.FloatProperty(name="Value", precision=3, step=10)
+    float01_v: bpy.props.FloatProperty(name="Value", min=0.0, max=1.0, precision=2, subtype="FACTOR")
+    bool_v: bpy.props.BoolProperty(name="Value")
+    str_v: bpy.props.StringProperty(name="Value")
+    enum_v: bpy.props.EnumProperty(name="Value", items=_param_enum_items, update=_on_enum_changed)
 
     def get_value(self):
         if self.kind == "INT":
@@ -118,49 +118,49 @@ class CB_Param(bpy.types.PropertyGroup):
 class CB_Settings(bpy.types.PropertyGroup):
     workflow: bpy.props.EnumProperty(
         name="Workflow",
-        description="ComfyUI-Workflow (API-Format), der mit deinem Render ausgeführt wird",
+        description="ComfyUI workflow (API format) that runs with your render",
         items=_workflow_items,
         update=_on_workflow_changed,
     )
     workflow_path: bpy.props.StringProperty()
     workflow_info: bpy.props.StringProperty()
     workflow_family: bpy.props.StringProperty()
+    workflow_needed: bpy.props.StringProperty()
     workflow_warnings: bpy.props.StringProperty()
     params: bpy.props.CollectionProperty(type=CB_Param)
     saved_values: bpy.props.StringProperty(default="{}")
 
     show_all_models: bpy.props.BoolProperty(
-        name="Alle Modelle zeigen",
-        description="Auch ControlNets anzeigen, die laut Dateiname nicht zur Modellfamilie des Workflows passen",
+        name="Show All Models",
+        description="Also list ControlNets whose file name doesn't match the workflow's model family",
         update=_on_workflow_changed,
     )
-    show_help: bpy.props.BoolProperty(name="Erklärungen", description="Kurze Erklärungen im Panel einblenden", default=True)
 
-    seed: bpy.props.IntProperty(name="Seed", min=0, description="Startwert des Zufallsrauschens. Gleicher Seed + gleiche Einstellungen = gleiches Bild")
-    seed_random: bpy.props.BoolProperty(name="Zufall", default=True, description="Bei jedem Senden einen neuen Seed würfeln")
+    seed: bpy.props.IntProperty(name="Seed", min=0, description="Same seed + same settings = same image")
+    seed_random: bpy.props.BoolProperty(name="Random", default=True, description="Roll a new seed for every send")
 
     extra_beauty: bpy.props.BoolProperty(name="Beauty", default=True)
-    extra_depth: bpy.props.BoolProperty(name="Depth", description="Abstand zur Kamera: nah = hell, fern = dunkel")
-    extra_normal: bpy.props.BoolProperty(name="Normal", description="Ausrichtung der Flächen relativ zur Kamera")
-    extra_lineart: bpy.props.BoolProperty(name="Line Art", description="Freestyle-Linien (wird beim Rendern automatisch aktiviert)")
+    extra_depth: bpy.props.BoolProperty(name="Depth", description="Distance to camera: near = bright, far = dark")
+    extra_normal: bpy.props.BoolProperty(name="Normal", description="Surface direction relative to the camera")
+    extra_lineart: bpy.props.BoolProperty(name="Line Art", description="Freestyle lines (enabled automatically while rendering)")
     normal_flip_x: bpy.props.BoolProperty(
-        name="Normal: Rot spiegeln",
-        description="Manche Normal-ControlNets erwarten Rot = links statt rechts",
+        name="Flip Normal X",
+        description="Some normal ControlNets expect red = left instead of right",
     )
     load_control_images: bpy.props.BoolProperty(
-        name="Steuerbilder in Blender laden",
-        description="Die erzeugten Pässe (Depth, Normal, ...) als Bilder „CB · …“ in Blender laden, zum Kontrollieren im Image Editor",
+        name="Load Control Images",
+        description="Load the generated passes as images 'CB · …' to check them in the Image Editor",
         default=True,
     )
     show_result: bpy.props.BoolProperty(
-        name="Ergebnis anzeigen",
-        description="Das Ergebnis automatisch in allen offenen Image Editoren anzeigen",
+        name="Show Result",
+        description="Show the result in all open Image Editors",
         default=True,
     )
 
     running: bpy.props.BoolProperty()
     progress: bpy.props.FloatProperty(subtype="FACTOR", min=0.0, max=1.0)
-    status: bpy.props.StringProperty(default="Bereit")
+    status: bpy.props.StringProperty(default="Ready")
     last_error: bpy.props.StringProperty()
     last_seed: bpy.props.IntProperty()
 

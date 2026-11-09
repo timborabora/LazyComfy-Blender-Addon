@@ -44,7 +44,7 @@ def step():
     if phase["name"] == "running":
         if s.running:
             log("läuft:", s.status, round(s.progress, 2))
-        if not s.running and s.status not in ("Rendere …", "Sende an ComfyUI …") and time.time() - phase["t"] > 3:
+        if not s.running and s.status not in ("Rendering …", "Sending to ComfyUI …") and time.time() - phase["t"] > 3:
             log("ende:", s.status, "| fehler:", s.last_error or "-")
             log("bilder:", [i.name for i in bpy.data.images])
             log("modelle:", [(p.label, p.str_v, p.enum_v) for p in s.params if p.section == "model"])

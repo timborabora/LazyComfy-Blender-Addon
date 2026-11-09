@@ -1,7 +1,7 @@
-"""Ein Durchlauf: Bilder hochladen, Workflow abschicken, Fortschritt verfolgen, Ergebnis holen.
+"""One run: upload images, queue the workflow, follow progress, fetch the result.
 
-Läuft in einem eigenen Thread und fasst bpy nicht an. Der Haupt-Thread liest
-die Felder (status, progress, done, ...) per Timer.
+Runs in its own thread and never touches bpy. The main thread reads the
+fields (status, progress, done, ...) from a timer.
 """
 
 import os
@@ -25,7 +25,7 @@ class Job:
         self.uploads = uploads          # [(pfad, dateiname, [node_ids])]
         self.out_dir = out_dir
         self.result_nodes = result_nodes
-        self.status = "Starte …"
+        self.status = "Starting …"
         self.progress = 0.0
         self.done = False
         self.cancelled = False
@@ -46,27 +46,27 @@ class Job:
         ws = None
         try:
             for path, name, node_ids in self.uploads:
-                self.status = f"Lade {name} hoch …"
+                self.status = f"Uploading {name} …"
                 value = comfy_client.upload_image(self.base, path, name)
                 for nid in node_ids:
                     self.workflow[nid]["inputs"]["image"] = value
             try:
                 ws = comfy_client.WebSocket(self.base, self.client_id)
             except (ComfyError, OSError):
-                ws = None  # ohne Websocket gibt es nur keinen Schritt-Fortschritt
-            self.status = "In der Warteschlange …"
+                ws = None  # without the websocket there is just no step progress
+            self.status = "Queued …"
             self.prompt_id = comfy_client.queue_prompt(self.base, self.workflow, self.client_id)
             self._wait(ws)
             if self.cancelled:
-                self.status = "Abgebrochen"
+                self.status = "Cancelled"
                 return
-            self.status = "Hole Ergebnis …"
+            self.status = "Fetching result …"
             self._fetch_results()
-            self.status = "Fertig"
+            self.status = "Done"
             self.progress = 1.0
-        except Exception as e:  # alles landet lesbar im Panel
+        except Exception as e:  # everything ends up readable in the panel
             self.error = str(e)
-            self.status = "Fehler"
+            self.status = "Error"
         finally:
             if ws:
                 ws.close()
@@ -90,19 +90,19 @@ class Job:
                 if kind == "progress" and data.get("max"):
                     self.progress = data["value"] / data["max"]
                     node = self.workflow.get(str(data.get("node")), {})
-                    self.status = f"{_node_label(node)}: Schritt {data['value']}/{data['max']}"
+                    self.status = f"{_node_label(node)}: step {data['value']}/{data['max']}"
                 elif kind == "executing" and data.get("node") is not None:
                     self.status = _node_label(self.workflow.get(str(data["node"]), {}))
                 elif kind == "execution_error":
                     raise ComfyError(
-                        f"ComfyUI-Fehler in {data.get('node_type', '?')}: {data.get('exception_message', '').strip()}"
+                        f"ComfyUI error in {data.get('node_type', '?')}: {data.get('exception_message', '').strip()}"
                     )
                 elif kind == "execution_interrupted":
                     self.cancelled = True
                     return
                 elif kind == "execution_success" or (kind == "executing" and data.get("node") is None):
                     return
-            # Sicherheitsnetz, falls eine Websocket-Nachricht verloren geht
+            # safety net in case a websocket message gets lost
             if time.time() - last_poll > (5.0 if ws else 1.0):
                 last_poll = time.time()
                 entry = comfy_client.history(self.base, self.prompt_id)
@@ -110,7 +110,7 @@ class Job:
                     st = entry["status"]
                     if st.get("status_str") == "error":
                         msgs = [m[1].get("exception_message", "") for m in st.get("messages", []) if m[0] == "execution_error"]
-                        raise ComfyError("ComfyUI-Fehler: " + ("; ".join(msgs) or "unbekannt"))
+                        raise ComfyError("ComfyUI error: " + ("; ".join(msgs) or "unknown"))
                     return
 
     def _fetch_results(self):
@@ -123,7 +123,7 @@ class Job:
                 images.append((nid, img))
         final = [x for x in images if x[1].get("type") == "output"] or images
         if not final:
-            raise ComfyError("Der Workflow hat kein Bild ausgegeben (SaveImage-Node fehlt?).")
+            raise ComfyError("The workflow produced no image (missing Save Image node?).")
         os.makedirs(self.out_dir, exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S")
         for nid, img in final:

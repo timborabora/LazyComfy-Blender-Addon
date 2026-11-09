@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 id = "comfy_bridge"
 version = "0.1.0"
 name = "Comfy Bridge"
-tagline = "Blender-Render samt Render-Pässen an ComfyUI schicken"
+tagline = "Send Blender renders and render passes to ComfyUI"
 maintainer = "Tim Jagodka <tim@studioborabora.com>"
 type = "add-on"
 website = "https://github.com/"
@@ -15,8 +15,8 @@ blender_version_min = "5.0.0"
 license = ["SPDX:MIT"]
 
 [permissions]
-network = "Verbindung zum lokalen ComfyUI-Server"
-files = "Render-Pässe und Ergebnisse speichern, Workflows lesen"
+network = "Connect to the local ComfyUI server"
+files = "Save render passes and results, read workflows"
 
 [build]
 paths_exclude_pattern = ["__pycache__/", "*.pyc"]

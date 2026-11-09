@@ -1,13 +1,13 @@
-"""Workflow-Dateien (ComfyUI API-Format) finden und auswerten.
+"""Find and analyse workflow files (ComfyUI API format).
 
-Konvention über Node-Titel (in ComfyUI: Rechtsklick auf Node > Title):
-  BL:beauty, BL:depth, BL:normal, BL:lineart, BL:mask_<Name>
-      LoadImage-Nodes, die das jeweilige Bild aus Blender bekommen.
-  BL:size     Empty-Latent-Node, der die Render-Auflösung bekommt.
-              Fehlt er, bekommen alle Empty*LatentImage-Nodes die Auflösung.
-  BL:result   SaveImage-Node, dessen Bild als Hauptergebnis gilt (optional).
-  UI:<Label>  Alle Werte dieses Nodes erscheinen als Felder im Panel.
-Modell-Dateien (Checkpoints, ControlNets, ...) werden immer als Dropdown gezeigt.
+Convention via node titles (in ComfyUI: right-click node > Title):
+  BL:beauty, BL:depth, BL:normal, BL:lineart, BL:mask_<name>
+      Load Image nodes that receive the matching image from Blender.
+  BL:size     Empty latent node that receives the render resolution.
+              Without it, all Empty*LatentImage nodes get the resolution.
+  BL:result   Save Image node whose image counts as the main result (optional).
+  UI:<Label>  All values of this node appear as fields in the panel.
+Model files (checkpoints, ControlNets, ...) always appear as dropdowns.
 """
 
 import glob
@@ -23,9 +23,9 @@ PROMPT_INPUTS = ("text", "t5xxl", "clip_l", "prompt")
 FLUX_CLASSES = {"UNETLoader", "UnetLoaderGGUF", "CLIPTextEncodeFlux", "DualCLIPLoader", "DualCLIPLoaderGGUF"}
 
 PRETTY = {
-    "strength": "Stärke",
+    "strength": "Strength",
     "start_percent": "Start",
-    "end_percent": "Ende",
+    "end_percent": "End",
     "steps": "Steps",
     "cfg": "CFG",
     "denoise": "Denoise",
@@ -35,15 +35,15 @@ PRETTY = {
     "low_threshold": "Low",
     "high_threshold": "High",
     "text": "Text",
-    "t5xxl": "T5 (Sätze)",
-    "clip_l": "CLIP-L (Stichworte)",
+    "t5xxl": "T5 (sentences)",
+    "clip_l": "CLIP-L (keywords)",
     "ckpt_name": "Checkpoint",
     "control_net_name": "ControlNet",
-    "unet_name": "Diffusionsmodell",
+    "unet_name": "Diffusion Model",
     "vae_name": "VAE",
-    "clip_name": "Text-Encoder",
-    "clip_name1": "Text-Encoder 1",
-    "clip_name2": "Text-Encoder 2",
+    "clip_name": "Text Encoder",
+    "clip_name1": "Text Encoder 1",
+    "clip_name2": "Text Encoder 2",
     "lora_name": "LoRA",
     "upscale_model_name": "Upscaler",
 }
@@ -62,14 +62,14 @@ def is_link(value):
 
 
 def scan(folders):
-    """Liste von (pfad, anzeigename, ist_beispiel) über alle Ordner."""
+    """List of (path, display name, is_example) across all folders."""
     found = []
     for folder, is_example in folders:
         if not folder or not os.path.isdir(folder):
             continue
         for path in sorted(glob.glob(os.path.join(folder, "*.json"))):
             name = os.path.splitext(os.path.basename(path))[0].replace("_", " ")
-            found.append((path, name + (" (Beispiel)" if is_example else ""), is_example))
+            found.append((path, name + (" (example)" if is_example else ""), is_example))
     return found
 
 
@@ -78,14 +78,11 @@ def load(path):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError) as e:
-        raise WorkflowError(f"Workflow nicht lesbar: {e}") from e
+        raise WorkflowError(f"Can't read workflow: {e}") from e
     if isinstance(data, dict) and "nodes" in data and "links" in data:
-        raise WorkflowError(
-            "Das ist ein normaler ComfyUI-Workflow, kein API-Format. "
-            "In ComfyUI über Workflow > Export (API) speichern."
-        )
+        raise WorkflowError("Not in API format. In ComfyUI use Workflow > Export (API).")
     if not isinstance(data, dict) or not all(isinstance(n, dict) and "class_type" in n for n in data.values()):
-        raise WorkflowError("Unbekanntes Dateiformat: erwartet wird ein ComfyUI-Workflow im API-Format.")
+        raise WorkflowError("Unknown file format: expected a ComfyUI workflow in API format.")
     return data
 
 
@@ -104,7 +101,7 @@ def _is_model_value(value, options):
 
 
 def analyze(workflow, object_info):
-    """Liest aus einem Workflow, welche Bilder, Modelle und Regler er braucht."""
+    """Work out which images, models and controls a workflow needs."""
     result = {
         "images": {},      # pass_key -> [node_id]
         "size_nodes": [],
@@ -131,7 +128,7 @@ def analyze(workflow, object_info):
             tag = low[3:].strip()
             if tag in PASS_KEYS or tag.startswith("mask_"):
                 if "image" not in inputs:
-                    result["warnings"].append(f"{title}: Node hat keinen image-Eingang (LoadImage verwenden).")
+                    result["warnings"].append(f"{title}: node has no image input (use Load Image).")
                 else:
                     key = tag if tag in PASS_KEYS else "mask:" + title[3:].strip()[5:]
                     result["images"].setdefault(key, []).append(node_id)
@@ -151,7 +148,7 @@ def analyze(workflow, object_info):
         for name, value in literal:
             kind, opts = specs[name]
             if name in model_inputs:
-                # Node-Titel unterscheidet z.B. "ControlNet Canny" von "ControlNet Depth"
+                # the node title tells e.g. "ControlNet Canny" from "ControlNet Depth"
                 plain = title if title and not low.startswith(("bl:", "ui:")) else (label_base if exposed else "")
                 if plain and len(model_inputs) == 1:
                     label = plain
@@ -174,9 +171,7 @@ def analyze(workflow, object_info):
     if not result["size_nodes"]:
         result["size_nodes"] = empty_latents
     if not result["images"]:
-        result["warnings"].append(
-            "Kein Node mit Titel BL:beauty / BL:depth / ... gefunden – der Workflow bekommt kein Bild aus Blender."
-        )
+        result["warnings"].append("No BL:beauty / BL:depth / … node – the workflow gets no image from Blender.")
     return result
 
 
@@ -208,13 +203,13 @@ def describe(analysis):
         parts.append(analysis["family"])
     names = []
     for key in analysis["images"]:
-        names.append(PASS_LABELS.get(key, "Maske " + key[5:] if key.startswith("mask:") else key))
-    parts.append("braucht: " + (", ".join(names) if names else "nichts aus Blender"))
-    return " · ".join(parts)
+        names.append(PASS_LABELS.get(key, "Mask " + key[5:] if key.startswith("mask:") else key))
+    parts.append(", ".join(names) if names else "no Blender input")
+    return "  ·  ".join(parts)
 
 
 def filter_models(options, input_name, family, show_all):
-    """ControlNets nach Modellfamilie filtern (am Dateinamen, das ist eine Heuristik)."""
+    """Filter ControlNets by model family (by file name – a heuristic)."""
     if show_all or input_name != "control_net_name" or not family:
         return list(options)
     if family == "Flux":

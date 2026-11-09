@@ -11,8 +11,9 @@ import bpy
 from . import comfy_client, passes, pipeline, props, state, workflows
 from .comfy_client import ComfyError
 
-HISTORY_TEXT = "ComfyBridge_Verlauf"
-RESULT_IMAGE = "ComfyUI Ergebnis"
+HISTORY_TEXT = "ComfyBridge_History"
+RESULT_IMAGE = "ComfyUI Result"
+PASS_IMAGE_LABELS = {"beauty": "Beauty", "depth": "Depth", "normal": "Normal", "lineart": "Line Art"}
 
 
 def prefs():
@@ -27,10 +28,10 @@ def tag_redraw():
                 area.tag_redraw()
 
 
-# ---------------------------------------------------------------- Verbindung
+# ---------------------------------------------------------------- connection
 
 def connect_async():
-    """Server suchen und /object_info holen, ohne Blender zu blockieren."""
+    """Find the server and fetch /object_info without blocking Blender."""
     if state.connecting:
         return
     state.connecting = True
@@ -41,7 +42,7 @@ def connect_async():
         try:
             base, stats = comfy_client.find_server(preferred)
             if not base:
-                raise ComfyError("Kein ComfyUI gefunden. Läuft Comfy Desktop?")
+                raise ComfyError("ComfyUI not found. Is Comfy Desktop running?")
             info = comfy_client.get_json(base, "/object_info", timeout=30)
             state.server, state.stats, state.object_info = base, stats, info
         except Exception as e:
@@ -64,28 +65,28 @@ def connect_async():
 
 
 def connect_sync(preferred=""):
-    """Für Skripte und Tests."""
+    """For scripts and tests."""
     base, stats = comfy_client.find_server(preferred)
     if not base:
-        raise ComfyError("Kein ComfyUI gefunden.")
+        raise ComfyError("ComfyUI not found.")
     state.server, state.stats = base, stats
     state.object_info = comfy_client.get_json(base, "/object_info", timeout=30)
     return base
 
 
-# ---------------------------------------------------------------- Parameter
+# ---------------------------------------------------------------- parameters
 
 def _current_values(settings):
     return {p.key: p.get_value() for p in settings.params}
 
 
 def rebuild_params(scene, save_old=True, from_user=False):
-    """Liest den gewählten Workflow neu ein und baut die Felder im Panel auf."""
+    """Re-read the selected workflow and rebuild the panel fields."""
     s = scene.comfy_bridge
-    # Dynamische Enums speichert Blender als Index – kommen Workflows dazu, verrutscht er.
+    # Blender stores dynamic enums as an index – it shifts when workflows are added.
     if (not from_user and s.workflow_path and s.workflow != s.workflow_path
             and any(i[0] == s.workflow_path for i in state.workflow_items)):
-        s.workflow = s.workflow_path  # löst rebuild_params erneut aus, dann passt alles
+        s.workflow = s.workflow_path  # triggers rebuild_params again with the right selection
         return
     saved = s.saved()
     if save_old and s.workflow_path and len(s.params):
@@ -95,6 +96,7 @@ def rebuild_params(scene, save_old=True, from_user=False):
     s.params.clear()
     s.workflow_info = ""
     s.workflow_family = ""
+    s.workflow_needed = ""
     s.workflow_warnings = ""
     if not path:
         s.saved_values = json.dumps(saved)
@@ -108,6 +110,7 @@ def rebuild_params(scene, save_old=True, from_user=False):
     analysis = workflows.analyze(wf, state.object_info)
     s.workflow_info = workflows.describe(analysis)
     s.workflow_family = analysis["family"]
+    s.workflow_needed = ",".join(analysis["images"])
     s.workflow_warnings = "\n".join(analysis["warnings"])
     old = saved.get(path, {})
     for p in analysis["params"]:
@@ -130,7 +133,7 @@ def rebuild_params(scene, save_old=True, from_user=False):
     s.saved_values = json.dumps(saved)
 
 
-# ---------------------------------------------------------------- Senden
+# ---------------------------------------------------------------- sending
 
 def _output_dir():
     p = prefs()
@@ -157,10 +160,10 @@ def _wanted_passes(s, needed):
 
 
 def build_job(scene, view_layer):
-    """Exportiert die Pässe und bereitet den Workflow vor. Rückgabe: (Job, Steuerbilder, Warnungen, Info)."""
+    """Export the passes and prepare the workflow. Returns (job, control images, warnings, info)."""
     s = scene.comfy_bridge
     if not state.server:
-        raise ComfyError("Nicht mit ComfyUI verbunden.")
+        raise ComfyError("Not connected to ComfyUI.")
     wf = workflows.load(s.workflow)
     analysis = workflows.analyze(wf, state.object_info)
     wanted = _wanted_passes(s, analysis["images"].keys())
@@ -190,16 +193,16 @@ def build_job(scene, view_layer):
     for key, node_ids in analysis["images"].items():
         path = files.get(key)
         if not path:
-            raise passes.PassError(f"Steuerbild „{key}“ fehlt.")
+            raise passes.PassError(f"Control image '{key}' is missing.")
         uploads.append((path, os.path.basename(path), node_ids))
 
     job = pipeline.Job(state.server, wf, state.client_id, uploads, _output_dir(), analysis["result_nodes"])
     info = {
-        "zeit": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "workflow": os.path.basename(s.workflow),
         "seed": s.seed,
-        "aufloesung": f"{width}x{height}",
-        "werte": {p.label: p.get_value() for p in s.params},
+        "resolution": f"{width}x{height}",
+        "values": {p.label: p.get_value() for p in s.params},
     }
     return job, files, warnings, info
 
@@ -211,7 +214,7 @@ def load_image(name, path):
         img.reload()
     else:
         if img:
-            img.name = name + " (alt)"
+            img.name = name + " (old)"
         img = bpy.data.images.load(path, check_existing=False)
         img.name = name
     return img
@@ -224,16 +227,21 @@ def show_in_image_editors(img):
                 area.spaces.active.image = img
 
 
+def _fail(s, message):
+    s.running = False
+    s.status = "Error"
+    s.last_error = message
+
+
 def finish_job(scene, job, info):
     s = scene.comfy_bridge
     s.running = False
     s.progress = job.progress
     if job.error:
-        s.status = "Fehler"
-        s.last_error = job.error
+        _fail(s, job.error)
         return
     if job.cancelled:
-        s.status = "Abgebrochen"
+        s.status = "Cancelled"
         return
     loaded = []
     for i, (title, path) in enumerate(job.results):
@@ -242,21 +250,20 @@ def finish_job(scene, job, info):
     if loaded and s.show_result and not bpy.app.background:
         show_in_image_editors(loaded[0])
     info["prompt_id"] = job.prompt_id
-    info["ergebnis"] = [p for _, p in job.results]
+    info["result"] = [p for _, p in job.results]
     text = bpy.data.texts.get(HISTORY_TEXT) or bpy.data.texts.new(HISTORY_TEXT)
     text.write(json.dumps(info, ensure_ascii=False) + "\n")
-    s.status = f"Fertig · Seed {info['seed']}"
+    s.status = f"Done · seed {info['seed']}"
     s.last_error = ""
 
 
 def start_job(scene, job, files, warnings, info):
     s = scene.comfy_bridge
     if s.load_control_images:
-        labels = {"beauty": "Beauty", "depth": "Depth", "normal": "Normal", "lineart": "Line Art"}
         for key, path in files.items():
-            load_image("CB · " + labels.get(key, "Maske " + key[5:]), path)
+            load_image("CB · " + PASS_IMAGE_LABELS.get(key, "Mask " + key[5:]), path)
     s.running, s.progress, s.last_error = True, 0.0, "\n".join(warnings)
-    s.status = "Sende an ComfyUI …"
+    s.status = "Sending to ComfyUI …"
     state.job = job
     job.start()
     scene_name = scene.name
@@ -280,19 +287,19 @@ def start_job(scene, job, files, warnings, info):
 
 
 def run_blocking(scene, view_layer):
-    """Synchron für Skripte/Tests: Pässe aus dem vorhandenen Render, senden, warten, Ergebnis laden."""
+    """Synchronous for scripts/tests: passes from the existing render, send, wait, load the result."""
     job, files, warnings, info = build_job(scene, view_layer)
     job.run()
     finish_job(scene, job, info)
     return job, files, warnings
 
 
-# ---------------------------------------------------------------- Operatoren
+# ---------------------------------------------------------------- operators
 
 class CB_OT_connect(bpy.types.Operator):
     bl_idname = "comfy_bridge.connect"
-    bl_label = "Verbinden"
-    bl_description = "ComfyUI suchen, Modelle und Nodes neu einlesen"
+    bl_label = "Connect"
+    bl_description = "Find ComfyUI and reload its models and nodes"
 
     def execute(self, context):
         props.refresh_workflow_items(context)
@@ -302,8 +309,8 @@ class CB_OT_connect(bpy.types.Operator):
 
 class CB_OT_reload_workflows(bpy.types.Operator):
     bl_idname = "comfy_bridge.reload_workflows"
-    bl_label = "Workflows neu laden"
-    bl_description = "Workflow-Ordner neu durchsuchen und den gewählten Workflow neu einlesen"
+    bl_label = "Reload Workflows"
+    bl_description = "Rescan the workflow folders and re-read the selected workflow"
 
     def execute(self, context):
         props.refresh_workflow_items(context)
@@ -313,9 +320,15 @@ class CB_OT_reload_workflows(bpy.types.Operator):
 
 class CB_OT_open_folder(bpy.types.Operator):
     bl_idname = "comfy_bridge.open_folder"
-    bl_label = "Ordner öffnen"
-    bl_description = "Öffnet den Ordner im Explorer"
-    which: bpy.props.EnumProperty(items=[("WORKFLOWS", "Workflows", ""), ("OUTPUT", "Ergebnisse", "")])
+    bl_label = "Open Folder"
+    bl_description = "Open the folder in the file browser"
+    which: bpy.props.EnumProperty(items=[("WORKFLOWS", "Workflows", ""), ("OUTPUT", "Results", "")])
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.which == "OUTPUT":
+            return "Open the folder where results are saved"
+        return "Open the workflow folder. Add your own workflows here (ComfyUI: Workflow > Export (API))"
 
     def execute(self, context):
         if self.which == "OUTPUT":
@@ -337,8 +350,7 @@ class _SendBase:
         try:
             job, files, warnings, info = build_job(context.scene, context.view_layer)
         except (ComfyError, passes.PassError, workflows.WorkflowError) as e:
-            context.scene.comfy_bridge.status = "Fehler"
-            context.scene.comfy_bridge.last_error = str(e)
+            _fail(context.scene.comfy_bridge, str(e))
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
         start_job(context.scene, job, files, warnings, info)
@@ -349,13 +361,11 @@ class _SendBase:
 
 class CB_OT_render_send(_SendBase, bpy.types.Operator):
     bl_idname = "comfy_bridge.render_send"
-    bl_label = "Rendern & an ComfyUI senden"
+    bl_label = "Render & Send"
     bl_description = (
-        "Rendert die Szene mit allen nötigen Pässen, erzeugt die Steuerbilder "
-        "und schickt alles mit dem gewählten Workflow an ComfyUI"
+        "Render the scene with the passes the workflow needs, "
+        "then send everything to ComfyUI"
     )
-
-    _handlers = []
 
     def execute(self, context):
         s = context.scene.comfy_bridge
@@ -380,7 +390,8 @@ class CB_OT_render_send(_SendBase, bpy.types.Operator):
 
         bpy.app.handlers.render_complete.append(on_complete)
         bpy.app.handlers.render_cancel.append(on_cancel)
-        s.status = "Rendere …"
+        s.status = "Rendering …"
+        s.last_error = ""
         scene_name = context.scene.name
         layer_name = context.view_layer.name
 
@@ -397,10 +408,9 @@ class CB_OT_render_send(_SendBase, bpy.types.Operator):
                     job, files, warnings, info = build_job(scene, layer)
                     start_job(scene, job, files, warnings, info)
                 except Exception as e:
-                    scene.comfy_bridge.status = "Fehler"
-                    scene.comfy_bridge.last_error = str(e)
+                    _fail(scene.comfy_bridge, str(e))
             elif scene:
-                scene.comfy_bridge.status = "Render abgebrochen"
+                scene.comfy_bridge.status = "Render cancelled"
             passes.restore_scene(saved)
             tag_redraw()
             return None
@@ -412,8 +422,8 @@ class CB_OT_render_send(_SendBase, bpy.types.Operator):
 
 class CB_OT_send(_SendBase, bpy.types.Operator):
     bl_idname = "comfy_bridge.send"
-    bl_label = "Letzten Render senden"
-    bl_description = "Schickt den vorhandenen Render (ohne neu zu rendern). Fehlende Pässe brauchen einen neuen Render"
+    bl_label = "Send Last Render"
+    bl_description = "Send the existing render without re-rendering. Missing passes need a new render"
 
     def execute(self, context):
         return self._send(context)
@@ -421,8 +431,8 @@ class CB_OT_send(_SendBase, bpy.types.Operator):
 
 class CB_OT_cancel(bpy.types.Operator):
     bl_idname = "comfy_bridge.cancel"
-    bl_label = "Abbrechen"
-    bl_description = "Bricht die laufende Berechnung in ComfyUI ab"
+    bl_label = "Cancel"
+    bl_description = "Stop the running job in ComfyUI"
 
     def execute(self, context):
         if state.job:
@@ -432,8 +442,8 @@ class CB_OT_cancel(bpy.types.Operator):
 
 class CB_OT_show_text(bpy.types.Operator):
     bl_idname = "comfy_bridge.show_error"
-    bl_label = "Meldung anzeigen"
-    bl_description = "Zeigt die vollständige Meldung"
+    bl_label = "Show Message"
+    bl_description = "Show the full message"
 
     def invoke(self, context, event):
         return context.window_manager.invoke_popup(self, width=520)

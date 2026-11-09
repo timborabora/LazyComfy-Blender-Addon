@@ -2,10 +2,11 @@
 
 Blender-Add-on (ab 5.0): Blender rendert, ComfyUI rechnet. Render und Render-Pässe gehen mit einem Klick an das lokale ComfyUI, das Ergebnis landet im Image Editor.
 
-Das Panel sitzt unter **Render Properties → Comfy Bridge** und hat drei Bereiche:
+Das Panel sitzt unter **Render Properties → Comfy Bridge** und ist auf Englisch. Oben stehen Verbindung, Workflow, **Render & Send**, **Send Last Render** und der Status, darunter einklappbare Bereiche:
 
-- **Quick**: Verbindung, Workflow, Prompt, Seed, Senden-Knopf und Fortschritt. Mehr braucht der tägliche Ablauf nicht.
-- **Workflow**: Modell-Dropdowns und die `UI:`-Regler des gewählten Workflows.
+- **Prompts**: die Prompt-Felder des Workflows.
+- **Models** (zugeklappt): Modell-Dropdowns.
+- **Settings** (zugeklappt): die `UI:`-Regler und der Seed.
 - **Advanced** (zugeklappt): zusätzliche Pässe, Normal-Konvention, Anzeige-Optionen, Modellfilter.
 
 Mehrere ControlNets oder andere Modelle (Qwen-Image usw.) brauchen keinen Add-on-Code. Das regelt allein der Workflow.
@@ -14,11 +15,11 @@ Mehrere ControlNets oder andere Modelle (Qwen-Image usw.) brauchen keinen Add-on
 
 1. Comfy Desktop starten. Das Add-on findet den Server selbst (8188, 8000, …). Mit ↻ wird neu gesucht.
 2. Workflow wählen. Das Panel zeigt, welche Pässe der Workflow braucht, und baut Modell-Dropdowns und Regler aus dem Workflow auf.
-3. **Rendern & an ComfyUI senden**. Blender rendert mit den nötigen Pässen, erzeugt die Steuerbilder, lädt sie hoch und zeigt den Fortschritt. Das Ergebnis heißt im Image Editor `ComfyUI Ergebnis`.
+3. **Render & Send**. Blender rendert mit den nötigen Pässen, erzeugt die Steuerbilder, lädt sie hoch und zeigt den Fortschritt. Das Ergebnis heißt im Image Editor `ComfyUI Result`.
 
-**Letzten Render senden** nimmt den vorhandenen Render. Fehlen Pässe (z. B. Depth), braucht es einen neuen Render.
+**Send Last Render** nimmt den vorhandenen Render. Fehlen Pässe (z. B. Depth), braucht es einen neuen Render.
 
-Jeder Lauf landet als Zeile im Textblock `ComfyBridge_Verlauf` (Seed, Workflow, alle Werte). ComfyUI schreibt zusätzlich den kompletten Workflow in die PNG.
+Jeder Lauf landet als Zeile im Textblock `ComfyBridge_History` (Seed, Workflow, alle Werte). ComfyUI schreibt zusätzlich den kompletten Workflow in die PNG.
 
 ## Eigene Workflows
 
@@ -35,7 +36,7 @@ In ComfyUI bauen, einmal dort testen, dann **Workflow → Export (API)** und die
 | `BL:result` | Save Image | gilt als Hauptergebnis |
 | `UI:Name` | beliebig | alle Werte des Nodes erscheinen als Regler im Panel |
 
-Fehlt `BL:size`, bekommen alle Empty-Latent-Nodes die Auflösung. Modell-Dateien (Checkpoints, ControlNets, VAE, Encoder, LoRAs) erscheinen immer als Dropdown, gefüllt mit dem, was in ComfyUI liegt. ControlNets werden am Dateinamen nach SDXL/Flux gefiltert. „Alle Modelle zeigen“ hebt den Filter auf. Seeds werden in allen KSamplern gesetzt.
+Fehlt `BL:size`, bekommen alle Empty-Latent-Nodes die Auflösung. Modell-Dateien (Checkpoints, ControlNets, VAE, Encoder, LoRAs) erscheinen immer als Dropdown, gefüllt mit dem, was in ComfyUI liegt. ControlNets werden am Dateinamen nach SDXL/Flux gefiltert. „Show All Models“ (Advanced) hebt den Filter auf. Seeds werden in allen KSamplern gesetzt.
 
 Werte, die du im Panel änderst, merkt sich die .blend pro Workflow.
 
@@ -51,7 +52,8 @@ Flux.1 dev steht unter der FLUX Non-Commercial License.
 ## Hinweise
 
 - Pässe werden aus dem Render Result gelesen. Den Compositor deiner Szene fasst das Add-on nicht an. Für den Render schaltet es die nötigen Pässe (und für Line Art Freestyle) kurz ein und danach wieder aus.
-- Normal-ControlNets sind sich bei der Rot-Richtung nicht einig. Wirkt das Ergebnis seitenverkehrt beleuchtet, „Normal: Rot spiegeln“ anhaken.
+- Normal-ControlNets sind sich bei der Rot-Richtung nicht einig. Wirkt das Ergebnis seitenverkehrt beleuchtet, „Flip Normal X“ (Advanced) anhaken.
+- Bei Cycles mit Denoising oder „Interleave“ speichert Blender die EXR einteilig. Das Add-on liest beide Varianten.
 
 ## Entwicklung
 

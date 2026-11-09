@@ -1,30 +1,19 @@
-"""Panel in drei Bereichen: Quick (täglicher Ablauf), Workflow (Modelle und Regler), Advanced."""
-
 import bpy
 
 from . import state
 
 
-def _help(layout, s, text):
-    if s.show_help:
-        col = layout.column(align=True)
-        col.scale_y = 0.75
-        for line in text.split("\n"):
-            col.label(text=line)
-
-
 def _draw_param(layout, p):
-    row = layout.row(align=True)
     if p.kind == "ENUM":
-        row.prop(p, "enum_v", text=p.label)
+        layout.prop(p, "enum_v", text=p.label)
     elif p.kind == "INT":
-        row.prop(p, "int_v", text=p.label)
+        layout.prop(p, "int_v", text=p.label)
     elif p.kind == "FLOAT":
-        row.prop(p, "float01_v" if p.unit_range else "float_v", text=p.label, slider=p.unit_range)
+        layout.prop(p, "float01_v" if p.unit_range else "float_v", text=p.label, slider=p.unit_range)
     elif p.kind == "BOOLEAN":
-        row.prop(p, "bool_v", text=p.label)
+        layout.prop(p, "bool_v", text=p.label)
     else:
-        row.prop(p, "str_v", text=p.label)
+        layout.prop(p, "str_v", text=p.label)
 
 
 class _Sub:
@@ -41,104 +30,119 @@ class CB_PT_main(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "render"
 
-    def draw_header_preset(self, context):
-        self.layout.prop(context.scene.comfy_bridge, "show_help", text="", icon="QUESTION", emboss=False)
-
-    def draw(self, context):
-        pass
-
-
-class CB_PT_quick(_Sub, bpy.types.Panel):
-    bl_label = "Quick"
-
     def draw(self, context):
         layout = self.layout
         s = context.scene.comfy_bridge
 
-        row = layout.row(align=True)
+        # Connection
+        box = layout.box()
+        row = box.row(align=True)
         if state.connecting:
-            row.label(text="Suche ComfyUI …", icon="SORTTIME")
+            row.label(text="Connecting …", icon="SORTTIME")
         elif state.server:
             version = (state.stats or {}).get("system", {}).get("comfyui_version", "")
-            row.label(text=f"Verbunden · {state.server.split('//')[-1]}  {version}", icon="CHECKMARK")
+            row.label(text=f"Connected  ·  ComfyUI {version}", icon="CHECKMARK")
         else:
-            row.label(text="Nicht verbunden", icon="ERROR")
-        row.operator("comfy_bridge.connect", text="", icon="FILE_REFRESH")
-        if not state.server and not state.connecting:
-            _help(layout, s, state.connect_error or "Comfy Desktop starten, dann auf ↻ klicken.")
+            row.label(text="Not connected", icon="ERROR")
+        row.operator("comfy_bridge.connect", text="", icon="FILE_REFRESH", emboss=False)
 
-        row = layout.row(align=True)
+        layout.separator(factor=0.5)
+
+        # Workflow
+        box = layout.box()
+        box.label(text="Workflow", icon="NODETREE")
+        row = box.row(align=True)
         row.prop(s, "workflow", text="")
         row.operator("comfy_bridge.reload_workflows", text="", icon="FILE_REFRESH")
         row.operator("comfy_bridge.open_folder", text="", icon="FILE_FOLDER").which = "WORKFLOWS"
         if s.workflow_info:
-            layout.label(text=s.workflow_info, icon="INFO")
+            box.label(text=s.workflow_info, icon="INFO")
         for line in s.workflow_warnings.splitlines():
-            layout.label(text=line, icon="ERROR")
+            box.label(text=line, icon="ERROR")
 
-        prompts = [p for p in s.params if p.section == "prompt"]
-        if prompts:
-            col = layout.column()
-            for p in prompts:
-                col.label(text=p.label)
-                col.prop(p, "str_v", text="")
-            _help(layout, s, "Kamera und Perspektive kommen aus Blender –\n"
-                             "keine Brennweite oder Blickwinkel in den Prompt schreiben.")
+        layout.separator(factor=0.5)
 
-        row = layout.row(align=True)
-        sub = row.row(align=True)
-        sub.enabled = not s.seed_random
-        sub.prop(s, "seed")
-        row.prop(s, "seed_random", toggle=True)
+        # Actions
+        col = layout.column()
+        col.scale_y = 1.8
+        col.operator("comfy_bridge.render_send", icon="RENDER_STILL")
+        layout.separator(factor=0.3)
+        col = layout.column()
+        col.scale_y = 1.3
+        col.operator("comfy_bridge.send", icon="EXPORT")
 
-        col = layout.column(align=True)
-        col.scale_y = 1.6
-        col.operator("comfy_bridge.render_send", icon="PLAY")
-        row = layout.row(align=True)
-        row.operator("comfy_bridge.send", icon="EXPORT")
-        row.operator("comfy_bridge.open_folder", text="Ergebnisse", icon="FILE_FOLDER").which = "OUTPUT"
+        layout.separator(factor=0.5)
+
+        # Status
         if s.running:
             row = layout.row(align=True)
             row.progress(factor=s.progress, text=s.status)
             row.operator("comfy_bridge.cancel", text="", icon="CANCEL")
-        else:
-            layout.label(text=s.status + (f" · letzter Seed {s.last_seed}" if s.last_seed and "Seed" not in s.status else ""))
-        if s.last_error:
+        elif s.last_error:
             box = layout.box()
-            lines = s.last_error.splitlines()
-            for line in lines[:4]:
-                box.label(text=line, icon="ERROR" if s.status == "Fehler" else "INFO")
-            if len(lines) > 4 or any(len(l) > 60 for l in lines):
-                box.operator("comfy_bridge.show_error", text="Ganze Meldung", icon="TEXT")
+            first = s.last_error.splitlines()[0]
+            box.label(text=first, icon="ERROR" if s.status == "Error" else "INFO")
+            if len(s.last_error) > len(first) or len(first) > 60:
+                box.operator("comfy_bridge.show_error", text="Details", icon="TEXT")
+        else:
+            row = layout.row()
+            row.label(text=s.status, icon="CHECKMARK" if s.status.startswith("Done") else "DOT")
+            row.operator("comfy_bridge.open_folder", text="", icon="FILE_FOLDER", emboss=False).which = "OUTPUT"
 
 
-class CB_PT_workflow(_Sub, bpy.types.Panel):
-    bl_label = "Workflow"
+class CB_PT_prompts(_Sub, bpy.types.Panel):
+    bl_label = "Prompts"
+
+    @classmethod
+    def poll(cls, context):
+        return any(p.section == "prompt" for p in context.scene.comfy_bridge.params)
 
     def draw(self, context):
         layout = self.layout
+        for p in context.scene.comfy_bridge.params:
+            if p.section == "prompt":
+                layout.label(text=p.label + ":")
+                layout.prop(p, "str_v", text="")
+                layout.separator(factor=0.5)
+
+
+class CB_PT_models(_Sub, bpy.types.Panel):
+    bl_label = "Models"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        return any(p.section == "model" for p in context.scene.comfy_bridge.params)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        col = layout.column()
+        for p in context.scene.comfy_bridge.params:
+            if p.section == "model":
+                _draw_param(col, p)
+
+
+class CB_PT_settings(_Sub, bpy.types.Panel):
+    bl_label = "Settings"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
         s = context.scene.comfy_bridge
-        models = [p for p in s.params if p.section == "model"]
-        if models:
-            layout.label(text="Modelle (aus ComfyUI)")
-            col = layout.column(align=True)
-            for p in models:
+        col = layout.column()
+        for p in s.params:
+            if p.section == "param":
                 _draw_param(col, p)
-            if not state.server:
-                layout.label(text="Ohne Verbindung keine Auswahlliste.", icon="ERROR")
-        params = [p for p in s.params if p.section == "param"]
-        if params:
-            layout.label(text="Regler")
-            col = layout.column(align=True)
-            for p in params:
-                _draw_param(col, p)
-            _help(layout, s, "Stärke: wie streng das Bild der Vorlage folgt (1 = exakt).\n"
-                             "Ende: ab welchem Anteil der Steps die Vorlage losgelassen wird.")
-        if not models and not params:
-            layout.label(text="Dieser Workflow hat keine Modelle oder UI:-Regler.")
-        _help(layout, s, "Eigene Workflows: in ComfyUI über Workflow > Export (API)\n"
-                         "in den Workflow-Ordner speichern. Node-Titel BL:beauty, BL:depth …\n"
-                         "bekommen Bilder aus Blender, Titel UI:Name erscheinen hier als Regler.")
+        layout.separator()
+        row = layout.row(heading="Seed")
+        sub = row.row(align=True)
+        sub.enabled = not s.seed_random
+        sub.prop(s, "seed", text="")
+        row.prop(s, "seed_random", text="", icon="FILE_REFRESH", toggle=True)
 
 
 class CB_PT_advanced(_Sub, bpy.types.Panel):
@@ -147,26 +151,25 @@ class CB_PT_advanced(_Sub, bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
         s = context.scene.comfy_bridge
-        layout.label(text="Render-Pässe")
-        needed = s.workflow_info.split("braucht:")[-1] if "braucht:" in s.workflow_info else ""
-        grid = layout.grid_flow(columns=2, align=True)
+        needed = s.workflow_needed.split(",") if s.workflow_needed else []
+        col = layout.column(heading="Passes")
         for key, label in (("beauty", "Beauty"), ("depth", "Depth"), ("normal", "Normal"), ("lineart", "Line Art")):
-            row = grid.row()
-            if label in needed:
-                row.label(text=label, icon="CHECKBOX_HLT")
+            if key in needed:
+                col.label(text=f"{label} (used by workflow)", icon="CHECKBOX_HLT")
             else:
-                row.prop(s, "extra_" + key)
-        layout.prop(s, "normal_flip_x")
-        layout.prop(s, "load_control_images")
-        layout.prop(s, "show_result")
-        layout.prop(s, "show_all_models")
-        _help(layout, s, "Pässe, die der Workflow braucht, sind immer an.\n"
-                         "Zusätzliche landen nur als Bild „CB · …“ in Blender.\n"
-                         "Masken: Node-Titel BL:mask_<Objekt oder Collection>.")
+                col.prop(s, "extra_" + key)
+        layout.separator()
+        col = layout.column()
+        col.prop(s, "normal_flip_x")
+        col.prop(s, "load_control_images")
+        col.prop(s, "show_result")
+        col.prop(s, "show_all_models")
 
 
-classes = (CB_PT_main, CB_PT_quick, CB_PT_workflow, CB_PT_advanced)
+classes = (CB_PT_main, CB_PT_prompts, CB_PT_models, CB_PT_settings, CB_PT_advanced)
 
 
 def register():

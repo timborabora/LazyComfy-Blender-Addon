@@ -1,8 +1,8 @@
-"""Render-Pässe aus dem Render Result holen und als Steuerbilder (PNG) schreiben.
+"""Take render passes from the Render Result and write them as control images (PNG).
 
-Blender speichert beim Sichern des Render Results als Multilayer-EXR alle aktiven
-Pässe mit. Den Compositor der Szene fassen wir dafür nicht an.
-Achtung: Die EXR ist mehrteilig – OpenImageIO zeigt ohne seek_subimage nur Teil 0.
+Saving the Render Result as multilayer EXR includes all active passes, so the
+scene's compositor is left alone. Careful: the EXR is usually multipart –
+without seek_subimage OpenImageIO only shows part 0.
 """
 
 import json
@@ -14,7 +14,7 @@ import numpy as np
 
 try:
     import OpenImageIO as oiio
-except ImportError:  # sehr alte Blender-Builds
+except ImportError:  # very old Blender builds
     oiio = None
 
 
@@ -23,17 +23,17 @@ class PassError(RuntimeError):
 
 
 def rendered_layers(scene, view_layer):
-    """View Layers, die beim nächsten Render tatsächlich gerechnet werden."""
+    """View layers that the next render actually computes."""
     if scene.render.use_single_layer:
         return [view_layer]
     return [vl for vl in scene.view_layers if vl.use] or [view_layer]
 
 
 def prepare_scene(scene, view_layer, needed):
-    """Schaltet die für `needed` nötigen Pässe auf allen gerenderten View Layers ein.
+    """Enable the passes `needed` on every rendered view layer.
 
-    Nur die aktive Layer reicht nicht: Ist bei ihr „Use for Rendering“ aus,
-    landet ihr Pass nie im Render. Rückgabe: Werte zum Zurücksetzen.
+    The active layer alone is not enough: if its "Use for Rendering" is off,
+    its pass never reaches the render. Returns values to restore.
     """
     saved = {}
 
@@ -54,7 +54,7 @@ def prepare_scene(scene, view_layer, needed):
         if "lineart" in needed:
             setattr_saved(vl, "use_freestyle", True, n + ":vl_freestyle")
             setattr_saved(vl.freestyle_settings, "as_render_pass", True, n + ":fs_pass")
-            # Ein LineSet ohne Linienstil zeichnet nichts („strokes set empty“)
+            # a line set without a line style draws nothing ("strokes set empty")
             fs = vl.freestyle_settings
             if not fs.linesets:
                 fs.linesets.new("CB Linien")
@@ -87,10 +87,10 @@ def _save_render(img, scene, path, media_type, file_format, color_mode, color_de
 
 
 def _read_exr(path):
-    """{teilname: (kanalnamen, array HxWxC)} plus alle Metadaten aller Teile."""
+    """{part name: (channel names, array HxWxC)} plus the metadata of all parts."""
     inp = oiio.ImageInput.open(path)
     if inp is None:
-        raise PassError(f"EXR nicht lesbar: {oiio.geterror()}")
+        raise PassError(f"Can't read EXR: {oiio.geterror()}")
     parts, attribs = {}, {}
     k = 0
     while inp.seek_subimage(k, 0):
@@ -101,8 +101,8 @@ def _read_exr(path):
         if name and not any(c.count(".") >= 2 for c in channels):
             parts[name] = (channels, pixels)
         else:
-            # Interleaved (alles in einem Teil, z.B. „Interleave“ an oder Cycles-Denoising):
-            # Kanäle „ViewLayer.Depth.Z“ nach „ViewLayer.Depth“ gruppieren.
+            # Interleaved (everything in one part, e.g. "Interleave" on or Cycles denoising):
+            # group channels "ViewLayer.Depth.Z" into "ViewLayer.Depth".
             groups = {}
             for idx, ch in enumerate(channels):
                 key = ch.rsplit(".", 1)[0] if "." in ch else (name or f"part{k}")
@@ -124,7 +124,7 @@ def write_png(path, arr):
     h, w, c = u8.shape
     out = oiio.ImageOutput.create(path)
     if out is None:
-        raise PassError(f"PNG nicht schreibbar: {oiio.geterror()}")
+        raise PassError(f"Can't write PNG: {oiio.geterror()}")
     out.open(path, oiio.ImageSpec(w, h, c, "uint8"))
     out.write_image(u8)
     out.close()
@@ -143,31 +143,31 @@ def _part(parts, view_layer_name, pass_name):
 
 def _missing(pass_name, parts):
     layers = sorted({name.rsplit(".", 1)[0] for name in parts if "." in name}) or ["?"]
-    return (f"{pass_name}-Pass fehlt im Render (gerendert: {', '.join(layers)}). "
-            "Mit „Rendern & senden“ neu rendern – „Letzten Render senden“ nutzt nur, was schon da ist.")
+    return (f"{pass_name} pass missing in the render (rendered: {', '.join(layers)}). "
+            "Use Render & Send – Send Last Render only uses what is already there.")
 
 
 def depth_image(z):
-    """Nah = hell, fern = dunkel, Hintergrund schwarz (wie Depth-ControlNets es erwarten)."""
+    """Near = bright, far = dark, background black (as depth ControlNets expect)."""
     z = z[:, :, 0] if z.ndim == 3 else z
     valid = np.isfinite(z) & (z > 0) & (z < 1e9)
     if not valid.any():
-        raise PassError("Depth-Pass ist leer – ist etwas vor der Kamera?")
+        raise PassError("Depth pass is empty – is anything in front of the camera?")
     near = float(z[valid].min())
     far = float(np.percentile(z[valid], 99.5))
     if far - near < 1e-6:
         far = near + 1e-6
     d = np.clip((far - z) / (far - near), 0.0, 1.0)
-    # kleiner Mindestwert, damit das fernste Objekt nicht im Hintergrund verschwindet
+    # small floor so the farthest object doesn't vanish into the background
     d = np.where(valid, 0.06 + 0.94 * d, 0.0)
     return d
 
 
 def normal_image(n, camera, flip_x=False):
-    """Welt-Normalen in Kamera-Raum, als RGB = n*0.5+0.5 (blau = zur Kamera)."""
+    """World normals to camera space, as RGB = n*0.5+0.5 (blue = towards camera)."""
     n = n[:, :, :3]
     rot = np.array(camera.matrix_world.to_3x3().normalized(), dtype=np.float32)
-    cam = n @ rot  # entspricht rot.T @ n pro Pixel
+    cam = n @ rot  # same as rot.T @ n per pixel
     length = np.linalg.norm(cam, axis=2)
     valid = length > 0.5
     cam = cam / np.maximum(length, 1e-6)[:, :, None]
@@ -179,7 +179,7 @@ def normal_image(n, camera, flip_x=False):
 
 
 def lineart_image(freestyle):
-    """Freestyle-Pass (RGBA-Linien auf transparent) → weiße Linien auf Schwarz."""
+    """Freestyle pass (RGBA lines on transparent) → white lines on black."""
     return freestyle[:, :, 3] if freestyle.shape[2] >= 4 else freestyle.max(axis=2)
 
 
@@ -203,7 +203,7 @@ def _hex_to_float(h):
 
 
 def mask_targets(name):
-    """Objekte für BL:mask_<name>: exakter Objektname, sonst Collection, sonst Namensanfang."""
+    """Objects for BL:mask_<name>: exact object name, else collection, else name prefix."""
     if name in bpy.data.objects:
         return {name}
     coll = bpy.data.collections.get(name)
@@ -220,7 +220,7 @@ def mask_image(parts, attribs, view_layer_name, name):
     layers = [_part(parts, view_layer_name, f"CryptoObject0{i}") for i in range(3)]
     layers = [l for l in layers if l is not None]
     if not layers:
-        raise PassError("Kein Cryptomatte-Pass im Render – bitte neu rendern.")
+        raise PassError("No Cryptomatte pass in the render – render again.")
     mask = np.zeros(layers[0].shape[:2], dtype=np.float32)
     for layer in layers:
         for id_ch, cov_ch in ((0, 1), (2, 3)):
@@ -230,12 +230,12 @@ def mask_image(parts, attribs, view_layer_name, name):
 
 
 def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
-    """Schreibt alle benötigten Steuerbilder. Rückgabe: ({pass_key: pfad}, [warnungen])."""
+    """Write all needed control images. Returns ({pass_key: path}, [warnings])."""
     if oiio is None:
-        raise PassError("OpenImageIO fehlt in diesem Blender-Build.")
+        raise PassError("OpenImageIO is missing in this Blender build.")
     img = bpy.data.images.get("Render Result")
     if img is None:
-        raise PassError("Kein Render vorhanden – zuerst rendern (F12).")
+        raise PassError("No render yet – render first (F12).")
     os.makedirs(out_dir, exist_ok=True)
     files, warnings = {}, []
 
@@ -243,7 +243,7 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
     try:
         _save_render(img, scene, beauty, "IMAGE", "PNG", "RGB", "8")
     except RuntimeError as e:
-        raise PassError(f"Render Result leer – zuerst rendern (F12). ({e})") from e
+        raise PassError(f"Render Result is empty – render first (F12). ({e})") from e
     files["beauty"] = beauty
 
     rest = [k for k in needed if k != "beauty"]
@@ -267,7 +267,7 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
             if n is None:
                 raise PassError(_missing("Normal", parts))
             if scene.camera is None:
-                raise PassError("Szene hat keine Kamera.")
+                raise PassError("The scene has no camera.")
             write_png(path, normal_image(n, scene.camera, flip_normal_x))
         elif key == "lineart":
             fs = _part(parts, vl, "Freestyle")
@@ -278,7 +278,7 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
             name = key[5:]
             mask, found = mask_image(parts, attribs, vl, name)
             if not found:
-                warnings.append(f"Maske „{name}“: kein Objekt oder keine Collection mit diesem Namen im Bild.")
+                warnings.append(f"Mask '{name}': no object or collection with that name in the image.")
             write_png(path, mask)
         else:
             continue

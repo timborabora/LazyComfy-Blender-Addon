@@ -1,7 +1,7 @@
-"""HTTP- und Websocket-Anbindung an ComfyUI.
+"""HTTP and websocket connection to ComfyUI.
 
-Nur Standardbibliothek: Blenders Python bringt kein websocket-Paket mit,
-daher ein minimaler Client (RFC 6455, nur was ComfyUI braucht).
+Standard library only: Blender's Python ships no websocket package,
+hence a minimal client (RFC 6455, only what ComfyUI needs).
 """
 
 import base64
@@ -31,7 +31,7 @@ def _request(url, data=None, headers=None, timeout=10.0):
     except urllib.error.HTTPError as e:
         return e.code, e.read()
     except (urllib.error.URLError, OSError) as e:
-        raise ComfyError(f"ComfyUI nicht erreichbar ({url}): {e}") from e
+        raise ComfyError(f"ComfyUI not reachable ({url}): {e}") from e
 
 
 def get_json(base, path, timeout=10.0):
@@ -47,7 +47,7 @@ def post_json(base, path, payload, timeout=30.0):
 
 
 def find_server(preferred=""):
-    """Sucht den laufenden ComfyUI-Server. Comfy Desktop nimmt nicht immer 8188."""
+    """Find the running ComfyUI server. Comfy Desktop does not always use 8188."""
     candidates = []
     if preferred:
         candidates.append(preferred.rstrip("/"))
@@ -67,7 +67,7 @@ def find_server(preferred=""):
 
 
 def upload_image(base, path, name, subfolder="comfy_bridge"):
-    """Lädt ein Bild in ComfyUIs input-Ordner. Rückgabe: Wert für LoadImage.image."""
+    """Upload an image into ComfyUI's input folder. Returns the value for LoadImage.image."""
     boundary = uuid.uuid4().hex
     with open(path, "rb") as f:
         content = f.read()
@@ -88,7 +88,7 @@ def upload_image(base, path, name, subfolder="comfy_bridge"):
         timeout=60,
     )
     if status != 200:
-        raise ComfyError(f"Upload von {name} fehlgeschlagen: HTTP {status} {body[:200]!r}")
+        raise ComfyError(f"Upload of {name} failed: HTTP {status} {body[:200]!r}")
     info = json.loads(body)
     sub = info.get("subfolder") or ""
     return f"{sub}/{info['name']}" if sub else info["name"]
@@ -102,11 +102,11 @@ def queue_prompt(base, workflow, client_id):
         data = {}
     if status == 200 and "prompt_id" in data:
         return data["prompt_id"]
-    raise ComfyError(format_prompt_error(data, workflow) or f"ComfyUI lehnt den Workflow ab (HTTP {status})")
+    raise ComfyError(format_prompt_error(data, workflow) or f"ComfyUI rejected the workflow (HTTP {status})")
 
 
 def format_prompt_error(data, workflow):
-    """Macht aus ComfyUIs Validierungsfehlern eine lesbare Meldung."""
+    """Turn ComfyUI's validation errors into a readable message."""
     lines = []
     err = data.get("error")
     if isinstance(err, dict) and err.get("message"):
@@ -137,7 +137,7 @@ def download_image(base, image, dest_path):
     )
     status, body = _request(f"{base}/view?{query}", timeout=60)
     if status != 200:
-        raise ComfyError(f"Bild {image['filename']} konnte nicht geladen werden (HTTP {status})")
+        raise ComfyError(f"Could not download {image['filename']} (HTTP {status})")
     with open(dest_path, "wb") as f:
         f.write(body)
     return dest_path
@@ -156,7 +156,7 @@ def spec_of(object_info, class_type, input_name):
 
 
 def parse_spec(spec):
-    """(kind, opts) aus einer ComfyUI-Input-Spezifikation. Kennt alte und neue COMBO-Schreibweise."""
+    """(kind, opts) from a ComfyUI input spec. Handles old and new COMBO notation."""
     if not spec:
         return None, {}
     kind = spec[0]
@@ -171,7 +171,7 @@ def parse_spec(spec):
 
 
 class WebSocket:
-    """Minimaler Websocket-Client für ComfyUIs /ws (nur Empfang von Text-Frames)."""
+    """Minimal websocket client for ComfyUI's /ws (receives text frames only)."""
 
     def __init__(self, base, client_id):
         url = urllib.parse.urlparse(base)
@@ -188,18 +188,18 @@ class WebSocket:
         while b"\r\n\r\n" not in resp:
             chunk = self.sock.recv(4096)
             if not chunk:
-                raise ComfyError("Websocket-Handshake abgebrochen")
+                raise ComfyError("Websocket handshake aborted")
             resp += chunk
         head, _, self.buf = resp.partition(b"\r\n\r\n")
         if b" 101" not in head.split(b"\r\n", 1)[0]:
-            raise ComfyError("Websocket-Handshake abgelehnt")
+            raise ComfyError("Websocket handshake rejected")
         self.sock.settimeout(30)
 
     def _read(self, n):
         while len(self.buf) < n:
             chunk = self.sock.recv(65536)
             if not chunk:
-                raise ConnectionError("Websocket geschlossen")
+                raise ConnectionError("Websocket closed")
             self.buf += chunk
         out, self.buf = self.buf[:n], self.buf[n:]
         return out
@@ -218,7 +218,7 @@ class WebSocket:
         self.sock.sendall(header + mask + masked)
 
     def recv_json(self, wait=1.0):
-        """Nächste Text-Nachricht als dict, oder None wenn innerhalb von `wait` nichts kam."""
+        """Next text message as a dict, or None if nothing arrived within `wait`."""
         if not self.buf:
             ready, _, _ = select.select([self.sock], [], [], wait)
             if not ready:
@@ -237,7 +237,7 @@ class WebSocket:
             if mask:
                 payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
             if op == 0x8:
-                raise ConnectionError("Websocket vom Server geschlossen")
+                raise ConnectionError("Websocket closed by server")
             if op == 0x9:
                 self._send(0xA, payload)
                 continue
@@ -249,7 +249,7 @@ class WebSocket:
             if fin:
                 break
         if msg_op != 0x1:
-            return {}  # Binärframes (Live-Vorschau) ignorieren
+            return {}  # ignore binary frames (live previews)
         return json.loads(message.decode("utf-8"))
 
     def close(self):

@@ -1,7 +1,7 @@
-"""Comfy Bridge – Blender rendert, ComfyUI rechnet.
+"""Comfy Bridge – Blender renders, ComfyUI computes.
 
-Blender ist nur die Fernbedienung: Render und Render-Pässe gehen per HTTP an das
-lokale ComfyUI, das Ergebnis kommt in den Image Editor zurück.
+Blender is only the remote control: render and render passes go over HTTP to the
+local ComfyUI, the result comes back into the Image Editor.
 """
 
 import bpy
@@ -14,16 +14,16 @@ class CB_Preferences(bpy.types.AddonPreferences):
 
     server_url: bpy.props.StringProperty(
         name="Server",
-        description="Leer lassen = automatisch suchen (Ports 8188, 8000, …). Sonst z.B. http://127.0.0.1:8188",
+        description="Leave empty to search automatically (ports 8188, 8000, …). Otherwise e.g. http://127.0.0.1:8188",
     )
     workflow_dir: bpy.props.StringProperty(
-        name="Eigene Workflows",
-        description="Ordner mit eigenen Workflows (API-JSON). Die mitgelieferten Beispiele bleiben zusätzlich verfügbar",
+        name="Workflow Folder",
+        description="Folder with your own workflows (API JSON). The bundled examples stay available",
         subtype="DIR_PATH",
     )
     output_dir: bpy.props.StringProperty(
-        name="Ergebnis-Ordner",
-        description="Leer = Ordner „comfy_bridge_output“ neben der .blend-Datei (oder Temp, wenn ungespeichert)",
+        name="Output Folder",
+        description="Empty = folder 'comfy_bridge_output' next to the .blend file (or temp if unsaved)",
         subtype="DIR_PATH",
     )
 
@@ -42,7 +42,7 @@ def _auto_connect():
 
 @bpy.app.handlers.persistent
 def _on_load(_dummy):
-    # Dropdown-Inhalte leben nicht in der .blend, also nach dem Öffnen neu holen
+    # Dropdown contents don't live in the .blend, so fetch them again after opening
     props.refresh_workflow_items()
     if state.server:
         for scene in bpy.data.scenes:
