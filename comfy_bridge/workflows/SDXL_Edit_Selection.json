@@ -1,0 +1,224 @@
+{
+ "1": {
+  "class_type": "CheckpointLoaderSimple",
+  "_meta": {
+   "title": "Checkpoint"
+  },
+  "inputs": {
+   "ckpt_name": "juggernautXL_ragnarokBy.safetensors"
+  }
+ },
+ "2": {
+  "class_type": "DifferentialDiffusion",
+  "_meta": {
+   "title": "Differential Diffusion"
+  },
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ]
+  }
+ },
+ "3": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "BL:edit_prompt"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": ""
+  }
+ },
+ "4": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "UI:Negative"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": "cartoon, illustration, drawing, painting, cgi, 3d render, plastic, anime, sketch, blurry"
+  }
+ },
+ "5": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "BL:result_prev"
+  },
+  "inputs": {
+   "image": "cb_result_prev.png"
+  }
+ },
+ "6": {
+  "class_type": "LoadImageMask",
+  "_meta": {
+   "title": "BL:mask_selection"
+  },
+  "inputs": {
+   "image": "cb_selection.png",
+   "channel": "red"
+  }
+ },
+ "7": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "BL:depth"
+  },
+  "inputs": {
+   "image": "cb_depth.png"
+  }
+ },
+ "8": {
+  "class_type": "ControlNetLoader",
+  "_meta": {
+   "title": "ControlNet Depth"
+  },
+  "inputs": {
+   "control_net_name": "controlnet-depth-sdxl.safetensors"
+  }
+ },
+ "9": {
+  "class_type": "ControlNetApplyAdvanced",
+  "_meta": {
+   "title": "UI:Depth"
+  },
+  "inputs": {
+   "positive": [
+    "3",
+    0
+   ],
+   "negative": [
+    "4",
+    0
+   ],
+   "control_net": [
+    "8",
+    0
+   ],
+   "image": [
+    "7",
+    0
+   ],
+   "strength": 0.6,
+   "start_percent": 0.0,
+   "end_percent": 0.8
+  }
+ },
+ "10": {
+  "class_type": "InpaintModelConditioning",
+  "_meta": {
+   "title": "Inpaint Conditioning"
+  },
+  "inputs": {
+   "positive": [
+    "9",
+    0
+   ],
+   "negative": [
+    "9",
+    1
+   ],
+   "vae": [
+    "1",
+    2
+   ],
+   "pixels": [
+    "5",
+    0
+   ],
+   "mask": [
+    "6",
+    0
+   ],
+   "noise_mask": true
+  }
+ },
+ "11": {
+  "class_type": "KSampler",
+  "_meta": {
+   "title": "UI:Sampler [steps, denoise]"
+  },
+  "inputs": {
+   "model": [
+    "2",
+    0
+   ],
+   "positive": [
+    "10",
+    0
+   ],
+   "negative": [
+    "10",
+    1
+   ],
+   "latent_image": [
+    "10",
+    2
+   ],
+   "seed": 0,
+   "steps": 28,
+   "cfg": 6.0,
+   "sampler_name": "dpmpp_2m",
+   "scheduler": "karras",
+   "denoise": 1.0
+  }
+ },
+ "12": {
+  "class_type": "VAEDecode",
+  "_meta": {
+   "title": "VAE Decode"
+  },
+  "inputs": {
+   "samples": [
+    "11",
+    0
+   ],
+   "vae": [
+    "1",
+    2
+   ]
+  }
+ },
+ "13": {
+  "class_type": "ImageCompositeMasked",
+  "_meta": {
+   "title": "Keep Outside Mask"
+  },
+  "inputs": {
+   "destination": [
+    "5",
+    0
+   ],
+   "source": [
+    "12",
+    0
+   ],
+   "x": 0,
+   "y": 0,
+   "resize_source": false,
+   "mask": [
+    "6",
+    0
+   ]
+  }
+ },
+ "14": {
+  "class_type": "SaveImage",
+  "_meta": {
+   "title": "BL:result"
+  },
+  "inputs": {
+   "images": [
+    "13",
+    0
+   ],
+   "filename_prefix": "comfy_bridge/sdxl_edit"
+  }
+ }
+}

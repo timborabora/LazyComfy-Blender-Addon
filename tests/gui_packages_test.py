@@ -1,6 +1,7 @@
-"""GUI check of the Model Packages panel: open it as a popup, screenshot, quit.
+"""GUI check of a Comfy Bridge panel: open it as a popup, screenshot, quit.
 
-blender examples/blockout_raum.blend --python tests/gui_packages_test.py -- <screenshot.png> [package_id]
+blender examples/blockout_raum.blend --python tests/gui_packages_test.py -- <screenshot.png> [package_id] [panel]
+Panel defaults to CB_PT_packages. With CB_PT_object_prompts / CB_PT_edit the test sets two object prompts.
 """
 
 import sys
@@ -22,10 +23,16 @@ def step():
     if phase["n"] == 0:
         if not st.server and time.time() - t0 < 30:
             return 0.5
-        if len(args) > 1:
-            bpy.context.scene.comfy_bridge.package = args[1]
+        s = bpy.context.scene.comfy_bridge
+        if len(args) > 1 and args[1] != "-":
+            s.package = args[1]
+        panel = args[2] if len(args) > 2 else "CB_PT_packages"
+        if panel in ("CB_PT_object_prompts", "CB_PT_edit"):
+            s.workflow = next(p for p, _, _ in st.workflow_items if p.endswith("SDXL_Object_Prompts_Depth.json"))
+            bpy.data.objects["Tisch"].comfy_prompt = "glossy red lacquer coffee table"
+            bpy.data.objects["Regal"].comfy_prompt = "white carrara marble bookshelf"
         with bpy.context.temp_override(window=win):
-            bpy.ops.wm.call_panel(name="CB_PT_packages", keep_open=True)
+            bpy.ops.wm.call_panel(name=panel, keep_open=True)
         phase["n"] = 1
         return 1.5
     with bpy.context.temp_override(window=win):

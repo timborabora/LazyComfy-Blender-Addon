@@ -98,6 +98,7 @@ def rebuild_params(scene, save_old=True, from_user=False):
     s.workflow_family = ""
     s.workflow_needed = ""
     s.workflow_warnings = ""
+    s.region_slots = 0
     if not path:
         s.saved_values = json.dumps(saved)
         return
@@ -111,6 +112,7 @@ def rebuild_params(scene, save_old=True, from_user=False):
     s.workflow_info = workflows.describe(analysis)
     s.workflow_family = analysis["family"]
     s.workflow_needed = ",".join(analysis["images"])
+    s.region_slots = len(analysis["regions"])
     s.workflow_warnings = "\n".join(analysis["warnings"])
     old = saved.get(path, {})
     for p in analysis["params"]:
@@ -159,29 +161,90 @@ def _wanted_passes(s, needed):
     return wanted
 
 
-def build_job(scene, view_layer):
+def prompt_objects(scene, view_layer):
+    """Objects with an object prompt that the render can see, in a stable order."""
+    objs = [o for o in scene.objects if o.comfy_prompt.strip() and o.visible_get(view_layer=view_layer)]
+    return sorted(objs, key=lambda o: o.name)
+
+
+def selected_objects(scene, view_layer):
+    return [o for o in scene.objects if o.select_get(view_layer=view_layer) and o.visible_get(view_layer=view_layer)]
+
+
+def workflow_needs(scene, view_layer, mode):
+    """Workflow, its analysis and the passes to render for `mode` ('main' or 'edit')."""
+    s = scene.comfy_bridge
+    path = s.edit_workflow if mode == "edit" else s.workflow
+    if not path:
+        raise workflows.WorkflowError("No edit workflow found." if mode == "edit" else "No workflow selected.")
+    wf = workflows.load(path)
+    analysis = workflows.analyze(wf, state.object_info)
+    wanted = _wanted_passes(s, analysis["images"].keys())
+    if analysis["regions"] or analysis["selection_nodes"]:
+        wanted.append("crypto")
+    return path, wf, analysis, wanted
+
+
+def _image_size(path):
+    inp = passes.oiio.ImageInput.open(path)
+    if inp is None:
+        raise passes.PassError(f"Can't read {path}")
+    spec = inp.spec()
+    inp.close()
+    return spec.width, spec.height
+
+
+def build_job(scene, view_layer, mode="main"):
     """Export the passes and prepare the workflow. Returns (job, control images, warnings, info)."""
     s = scene.comfy_bridge
     if not state.server:
         raise ComfyError("Not connected to ComfyUI.")
-    wf = workflows.load(s.workflow)
-    analysis = workflows.analyze(wf, state.object_info)
-    wanted = _wanted_passes(s, analysis["images"].keys())
-    files, warnings = passes.export(scene, view_layer, wanted, _pass_dir(), s.normal_flip_x)
+    path, wf, analysis, wanted = workflow_needs(scene, view_layer, mode)
+    warnings = []
+
+    masks, region_objects = {}, []
+    if mode == "main":
+        region_objects = prompt_objects(scene, view_layer)
+        slots = sorted(analysis["regions"])
+        if len(region_objects) > len(slots):
+            skipped = ", ".join(o.name for o in region_objects[len(slots):])
+            warnings.append(f"Only {len(slots)} object prompts fit this workflow – skipped: {skipped}")
+        region_objects = region_objects[:len(slots)]
+        for n, obj in zip(slots, region_objects):
+            masks[f"region_{n}"] = {"names": {obj.name}}
+    else:
+        prev = bpy.path.abspath(s.last_result)
+        if not prev or not os.path.isfile(prev):
+            raise passes.PassError("No previous result to edit – use Render & Send first.")
+        selected = selected_objects(scene, view_layer)
+        if not selected:
+            raise passes.PassError("Select the objects to change in the viewport first.")
+        if not s.edit_prompt.strip():
+            raise passes.PassError("Describe the change in the Change field first.")
+        masks["selection"] = {"names": {o.name for o in selected}, "grow": s.edit_grow,
+                              "feather": s.edit_feather, "size": _image_size(prev)}
+
+    files, pass_warnings, visible = passes.export(scene, view_layer, wanted, _pass_dir(), s.normal_flip_x, masks)
+    warnings += pass_warnings
 
     wf = copy.deepcopy(wf)
-    for p in s.params:
-        node = wf.get(p.node_id)
-        if node and p.input_name in node.get("inputs", {}):
-            node["inputs"][p.input_name] = p.get_value()
-
-    if s.seed_random:
-        s.seed = random.randint(0, 2**31 - 1)
+    if mode == "main":
+        for p in s.params:
+            node = wf.get(p.node_id)
+            if node and p.input_name in node.get("inputs", {}):
+                node["inputs"][p.input_name] = p.get_value()
+        if s.seed_random:
+            s.seed = random.randint(0, 2**31 - 1)
+        seed = s.seed
+    else:
+        seed = s.last_seed  # same noise as the image being edited
+        for nid in analysis["edit_prompt_nodes"]:
+            node = wf[nid]["inputs"]
+            node["text" if "text" in node else "prompt"] = s.edit_prompt
     for node in wf.values():
         for name in workflows.SEED_INPUTS:
             if name in node.get("inputs", {}) and not workflows.is_link(node["inputs"][name]):
-                node["inputs"][name] = s.seed
-    s.last_seed = s.seed
+                node["inputs"][name] = seed
 
     r = scene.render
     width = max(64, int(r.resolution_x * r.resolution_percentage / 100) // 8 * 8)
@@ -191,20 +254,54 @@ def build_job(scene, view_layer):
 
     uploads = []
     for key, node_ids in analysis["images"].items():
-        path = files.get(key)
-        if not path:
+        if not files.get(key):
             raise passes.PassError(f"Control image '{key}' is missing.")
-        uploads.append((path, os.path.basename(path), node_ids))
+        uploads.append((files[key], os.path.basename(files[key]), node_ids))
 
+    # Object prompt slots: unused or invisible slots get strength 0 and an empty mask.
+    used = []
+    for n, slot in sorted(analysis["regions"].items()):
+        key = f"region_{n}"
+        obj = next((o for k, o in zip(sorted(analysis["regions"]), region_objects) if k == n), None)
+        active = obj is not None and visible.get(key)
+        if obj is not None and not active:
+            warnings.append(f"'{obj.name}' is not in the frame – its object prompt is skipped.")
+        mask_file = files.get(key) or _blank_mask(width, height)
+        uploads.append((mask_file, f"cb_{key}.png", [slot["mask"]]))
+        wf[slot["prompt"]]["inputs"]["text"] = obj.comfy_prompt if active else ""
+        wf[slot["apply"]]["inputs"]["strength"] = s.region_strength if active else 0.0
+        if active:
+            used.append(f"{obj.name}: {obj.comfy_prompt}")
+
+    if mode == "edit":
+        prev = bpy.path.abspath(s.last_result)
+        uploads.append((prev, "cb_result_prev.png", analysis["prev_nodes"]))
+        uploads.append((files["selection"], "cb_selection.png", analysis["selection_nodes"]))
+        if not visible.get("selection"):
+            raise passes.PassError("The selected objects are not in the frame.")
+
+    s.last_seed = seed
     job = pipeline.Job(state.server, wf, state.client_id, uploads, _output_dir(), analysis["result_nodes"])
     info = {
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "workflow": os.path.basename(s.workflow),
-        "seed": s.seed,
+        "workflow": os.path.basename(path),
+        "seed": seed,
         "resolution": f"{width}x{height}",
-        "values": {p.label: p.get_value() for p in s.params},
+        "values": {p.label: p.get_value() for p in s.params} if mode == "main" else {"change": s.edit_prompt},
     }
+    if used:
+        info["object_prompts"] = used
+    if mode == "edit":
+        info["edited"] = sorted(masks["selection"]["names"])
     return job, files, warnings, info
+
+
+def _blank_mask(width, height):
+    path = os.path.join(_pass_dir(), f"cb_blank_{width}x{height}.png")
+    if not os.path.exists(path):
+        os.makedirs(_pass_dir(), exist_ok=True)
+        passes.write_png(path, passes.np.zeros((height, width), dtype=passes.np.float32))
+    return path
 
 
 def load_image(name, path):
@@ -251,6 +348,8 @@ def finish_job(scene, job, info):
         show_in_image_editors(loaded[0])
     info["prompt_id"] = job.prompt_id
     info["result"] = [p for _, p in job.results]
+    if job.results:
+        s.last_result = job.results[0][1]
     text = bpy.data.texts.get(HISTORY_TEXT) or bpy.data.texts.new(HISTORY_TEXT)
     text.write(json.dumps(info, ensure_ascii=False) + "\n")
     s.status = f"Done · seed {info['seed']}"
@@ -286,9 +385,9 @@ def start_job(scene, job, files, warnings, info):
     bpy.app.timers.register(poll, first_interval=0.25, persistent=True)
 
 
-def run_blocking(scene, view_layer):
+def run_blocking(scene, view_layer, mode="main"):
     """Synchronous for scripts/tests: passes from the existing render, send, wait, load the result."""
-    job, files, warnings, info = build_job(scene, view_layer)
+    job, files, warnings, info = build_job(scene, view_layer, mode)
     job.run()
     finish_job(scene, job, info)
     return job, files, warnings
@@ -368,56 +467,88 @@ class CB_OT_render_send(_SendBase, bpy.types.Operator):
     )
 
     def execute(self, context):
-        s = context.scene.comfy_bridge
-        wf = workflows.load(s.workflow)
-        analysis = workflows.analyze(wf, state.object_info)
-        wanted = _wanted_passes(s, analysis["images"].keys())
-        saved = passes.prepare_scene(context.scene, context.view_layer, wanted)
+        return render_then_send(self, context, "main")
 
-        if bpy.app.background:
-            bpy.ops.render.render()
-            result = self._send(context)
+
+def render_then_send(op, context, mode):
+    """Render with the passes the workflow needs, then build and start the job."""
+    s = context.scene.comfy_bridge
+    try:
+        _, _, _, wanted = workflow_needs(context.scene, context.view_layer, mode)
+    except workflows.WorkflowError as e:
+        _fail(s, str(e))
+        op.report({"ERROR"}, str(e))
+        return {"CANCELLED"}
+    saved = passes.prepare_scene(context.scene, context.view_layer, wanted)
+
+    if bpy.app.background:
+        bpy.ops.render.render()
+        try:
+            job, files, warnings, info = build_job(context.scene, context.view_layer, mode)
+        except (ComfyError, passes.PassError, workflows.WorkflowError) as e:
             passes.restore_scene(saved)
-            return result
-
-        flag = {"state": None}
-
-        def on_complete(*_):
-            flag["state"] = "done"
-
-        def on_cancel(*_):
-            flag["state"] = "cancel"
-
-        bpy.app.handlers.render_complete.append(on_complete)
-        bpy.app.handlers.render_cancel.append(on_cancel)
-        s.status = "Rendering …"
-        s.last_error = ""
-        scene_name = context.scene.name
-        layer_name = context.view_layer.name
-
-        def wait():
-            if flag["state"] is None:
-                return 0.2
-            for lst, fn in ((bpy.app.handlers.render_complete, on_complete), (bpy.app.handlers.render_cancel, on_cancel)):
-                if fn in lst:
-                    lst.remove(fn)
-            scene = bpy.data.scenes.get(scene_name)
-            if flag["state"] == "done" and scene:
-                layer = scene.view_layers.get(layer_name) or scene.view_layers[0]
-                try:
-                    job, files, warnings, info = build_job(scene, layer)
-                    start_job(scene, job, files, warnings, info)
-                except Exception as e:
-                    _fail(scene.comfy_bridge, str(e))
-            elif scene:
-                scene.comfy_bridge.status = "Render cancelled"
-            passes.restore_scene(saved)
-            tag_redraw()
-            return None
-
-        bpy.app.timers.register(wait, first_interval=0.2, persistent=True)
-        bpy.ops.render.render("INVOKE_DEFAULT")
+            _fail(s, str(e))
+            op.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
+        passes.restore_scene(saved)
+        start_job(context.scene, job, files, warnings, info)
         return {"FINISHED"}
+
+    flag = {"state": None}
+
+    def on_complete(*_):
+        flag["state"] = "done"
+
+    def on_cancel(*_):
+        flag["state"] = "cancel"
+
+    bpy.app.handlers.render_complete.append(on_complete)
+    bpy.app.handlers.render_cancel.append(on_cancel)
+    s.status = "Rendering …"
+    s.last_error = ""
+    scene_name = context.scene.name
+    layer_name = context.view_layer.name
+
+    def wait():
+        if flag["state"] is None:
+            return 0.2
+        for lst, fn in ((bpy.app.handlers.render_complete, on_complete), (bpy.app.handlers.render_cancel, on_cancel)):
+            if fn in lst:
+                lst.remove(fn)
+        scene = bpy.data.scenes.get(scene_name)
+        if flag["state"] == "done" and scene:
+            layer = scene.view_layers.get(layer_name) or scene.view_layers[0]
+            try:
+                job, files, warnings, info = build_job(scene, layer, mode)
+                start_job(scene, job, files, warnings, info)
+            except Exception as e:
+                _fail(scene.comfy_bridge, str(e))
+        elif scene:
+            scene.comfy_bridge.status = "Render cancelled"
+        passes.restore_scene(saved)
+        tag_redraw()
+        return None
+
+    bpy.app.timers.register(wait, first_interval=0.2, persistent=True)
+    bpy.ops.render.render("INVOKE_DEFAULT")
+    return {"FINISHED"}
+
+
+class CB_OT_edit_selection(bpy.types.Operator):
+    bl_idname = "comfy_bridge.edit_selection"
+    bl_label = "Redo Selection"
+    bl_description = (
+        "Repaint only the selected objects in the last result: same seed, new prompt, "
+        "everything outside the (grown) mask stays pixel-identical"
+    )
+
+    @classmethod
+    def poll(cls, context):
+        s = context.scene.comfy_bridge
+        return state.server and s.edit_workflow and s.last_result and not s.running
+
+    def execute(self, context):
+        return render_then_send(self, context, "edit")
 
 
 class CB_OT_send(_SendBase, bpy.types.Operator):
@@ -596,6 +727,7 @@ classes = (
     CB_OT_reload_workflows,
     CB_OT_open_folder,
     CB_OT_render_send,
+    CB_OT_edit_selection,
     CB_OT_send,
     CB_OT_cancel,
     CB_OT_show_text,

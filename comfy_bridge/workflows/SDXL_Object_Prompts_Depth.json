@@ -1,0 +1,439 @@
+{
+ "1": {
+  "class_type": "CheckpointLoaderSimple",
+  "_meta": {
+   "title": "Checkpoint"
+  },
+  "inputs": {
+   "ckpt_name": "juggernautXL_ragnarokBy.safetensors"
+  }
+ },
+ "2": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "UI:Positive"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": "RAW photo, modern living room, concrete walls, oak floor, large windows, soft daylight, photorealistic, 8k uhd, DSLR"
+  }
+ },
+ "3": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "UI:Negative"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": "cartoon, illustration, drawing, painting, cgi, 3d render, plastic, anime, sketch, blurry"
+  }
+ },
+ "4": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "BL:beauty"
+  },
+  "inputs": {
+   "image": "cb_beauty.png"
+  }
+ },
+ "5": {
+  "class_type": "Canny",
+  "_meta": {
+   "title": "UI:Canny Edges"
+  },
+  "inputs": {
+   "image": [
+    "4",
+    0
+   ],
+   "low_threshold": 0.2,
+   "high_threshold": 0.6
+  }
+ },
+ "6": {
+  "class_type": "ControlNetLoader",
+  "_meta": {
+   "title": "ControlNet Canny"
+  },
+  "inputs": {
+   "control_net_name": "controlnet-canny-sdxl.safetensors"
+  }
+ },
+ "7": {
+  "class_type": "ControlNetApplyAdvanced",
+  "_meta": {
+   "title": "UI:Canny"
+  },
+  "inputs": {
+   "positive": [
+    "54",
+    0
+   ],
+   "negative": [
+    "3",
+    0
+   ],
+   "control_net": [
+    "6",
+    0
+   ],
+   "image": [
+    "5",
+    0
+   ],
+   "strength": 0.7,
+   "start_percent": 0.0,
+   "end_percent": 0.8
+  }
+ },
+ "8": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "BL:depth"
+  },
+  "inputs": {
+   "image": "cb_depth.png"
+  }
+ },
+ "9": {
+  "class_type": "ControlNetLoader",
+  "_meta": {
+   "title": "ControlNet Depth"
+  },
+  "inputs": {
+   "control_net_name": "controlnet-depth-sdxl.safetensors"
+  }
+ },
+ "10": {
+  "class_type": "ControlNetApplyAdvanced",
+  "_meta": {
+   "title": "UI:Depth"
+  },
+  "inputs": {
+   "positive": [
+    "7",
+    0
+   ],
+   "negative": [
+    "7",
+    1
+   ],
+   "control_net": [
+    "9",
+    0
+   ],
+   "image": [
+    "8",
+    0
+   ],
+   "strength": 0.7,
+   "start_percent": 0.0,
+   "end_percent": 0.8
+  }
+ },
+ "11": {
+  "class_type": "EmptyLatentImage",
+  "_meta": {
+   "title": "BL:size"
+  },
+  "inputs": {
+   "width": 1024,
+   "height": 1024,
+   "batch_size": 1
+  }
+ },
+ "12": {
+  "class_type": "KSampler",
+  "_meta": {
+   "title": "UI:Sampler [steps, cfg, sampler_name, scheduler]"
+  },
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ],
+   "positive": [
+    "10",
+    0
+   ],
+   "negative": [
+    "10",
+    1
+   ],
+   "latent_image": [
+    "11",
+    0
+   ],
+   "seed": 0,
+   "steps": 25,
+   "cfg": 7.0,
+   "sampler_name": "euler_ancestral",
+   "scheduler": "normal",
+   "denoise": 1.0
+  }
+ },
+ "13": {
+  "class_type": "VAEDecode",
+  "_meta": {
+   "title": "VAE Decode"
+  },
+  "inputs": {
+   "samples": [
+    "12",
+    0
+   ],
+   "vae": [
+    "1",
+    2
+   ]
+  }
+ },
+ "14": {
+  "class_type": "SaveImage",
+  "_meta": {
+   "title": "BL:result"
+  },
+  "inputs": {
+   "images": [
+    "13",
+    0
+   ],
+   "filename_prefix": "comfy_bridge/sdxl_objects"
+  }
+ },
+ "21": {
+  "class_type": "LoadImageMask",
+  "_meta": {
+   "title": "BL:region_1_mask"
+  },
+  "inputs": {
+   "image": "cb_region.png",
+   "channel": "red"
+  }
+ },
+ "22": {
+  "class_type": "LoadImageMask",
+  "_meta": {
+   "title": "BL:region_2_mask"
+  },
+  "inputs": {
+   "image": "cb_region.png",
+   "channel": "red"
+  }
+ },
+ "23": {
+  "class_type": "LoadImageMask",
+  "_meta": {
+   "title": "BL:region_3_mask"
+  },
+  "inputs": {
+   "image": "cb_region.png",
+   "channel": "red"
+  }
+ },
+ "24": {
+  "class_type": "LoadImageMask",
+  "_meta": {
+   "title": "BL:region_4_mask"
+  },
+  "inputs": {
+   "image": "cb_region.png",
+   "channel": "red"
+  }
+ },
+ "31": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "BL:region_1_prompt"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": ""
+  }
+ },
+ "32": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "BL:region_2_prompt"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": ""
+  }
+ },
+ "33": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "BL:region_3_prompt"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": ""
+  }
+ },
+ "34": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "BL:region_4_prompt"
+  },
+  "inputs": {
+   "clip": [
+    "1",
+    1
+   ],
+   "text": ""
+  }
+ },
+ "41": {
+  "class_type": "ConditioningSetMask",
+  "_meta": {
+   "title": "BL:region_1"
+  },
+  "inputs": {
+   "conditioning": [
+    "31",
+    0
+   ],
+   "mask": [
+    "21",
+    0
+   ],
+   "strength": 0.0,
+   "set_cond_area": "default"
+  }
+ },
+ "42": {
+  "class_type": "ConditioningSetMask",
+  "_meta": {
+   "title": "BL:region_2"
+  },
+  "inputs": {
+   "conditioning": [
+    "32",
+    0
+   ],
+   "mask": [
+    "22",
+    0
+   ],
+   "strength": 0.0,
+   "set_cond_area": "default"
+  }
+ },
+ "43": {
+  "class_type": "ConditioningSetMask",
+  "_meta": {
+   "title": "BL:region_3"
+  },
+  "inputs": {
+   "conditioning": [
+    "33",
+    0
+   ],
+   "mask": [
+    "23",
+    0
+   ],
+   "strength": 0.0,
+   "set_cond_area": "default"
+  }
+ },
+ "44": {
+  "class_type": "ConditioningSetMask",
+  "_meta": {
+   "title": "BL:region_4"
+  },
+  "inputs": {
+   "conditioning": [
+    "34",
+    0
+   ],
+   "mask": [
+    "24",
+    0
+   ],
+   "strength": 0.0,
+   "set_cond_area": "default"
+  }
+ },
+ "51": {
+  "class_type": "ConditioningCombine",
+  "_meta": {
+   "title": "Combine 1"
+  },
+  "inputs": {
+   "conditioning_1": [
+    "2",
+    0
+   ],
+   "conditioning_2": [
+    "41",
+    0
+   ]
+  }
+ },
+ "52": {
+  "class_type": "ConditioningCombine",
+  "_meta": {
+   "title": "Combine 2"
+  },
+  "inputs": {
+   "conditioning_1": [
+    "51",
+    0
+   ],
+   "conditioning_2": [
+    "42",
+    0
+   ]
+  }
+ },
+ "53": {
+  "class_type": "ConditioningCombine",
+  "_meta": {
+   "title": "Combine 3"
+  },
+  "inputs": {
+   "conditioning_1": [
+    "52",
+    0
+   ],
+   "conditioning_2": [
+    "43",
+    0
+   ]
+  }
+ },
+ "54": {
+  "class_type": "ConditioningCombine",
+  "_meta": {
+   "title": "Combine 4"
+  },
+  "inputs": {
+   "conditioning_1": [
+    "53",
+    0
+   ],
+   "conditioning_2": [
+    "44",
+    0
+   ]
+  }
+ }
+}

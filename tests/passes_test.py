@@ -17,7 +17,7 @@ scene, layer = bpy.context.scene, bpy.context.view_layer
 needed = ["beauty", "depth", "normal", "lineart", "mask:Sofa", "mask:Gibtsnicht"]
 saved = passes.prepare_scene(scene, layer, needed)
 bpy.ops.render.render()
-files, warnings = passes.export(scene, layer, needed, out)
+files, warnings, _ = passes.export(scene, layer, needed, out)
 passes.restore_scene(saved)
 print("TEST files", files)
 print("TEST warnings", warnings)

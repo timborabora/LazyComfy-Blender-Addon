@@ -49,7 +49,7 @@ def prepare_scene(scene, view_layer, needed):
             setattr_saved(vl, "use_pass_z", True, n + ":z")
         if "normal" in needed:
             setattr_saved(vl, "use_pass_normal", True, n + ":normal")
-        if any(k.startswith("mask:") for k in needed):
+        if "crypto" in needed or any(k.startswith("mask:") for k in needed):
             setattr_saved(vl, "use_pass_cryptomatte_object", True, n + ":crypto")
         if "lineart" in needed:
             setattr_saved(vl, "use_freestyle", True, n + ":vl_freestyle")
@@ -213,10 +213,11 @@ def mask_targets(name):
     return {o.name for o in bpy.data.objects if o.name.lower().startswith(low)}
 
 
-def mask_image(parts, attribs, view_layer_name, name):
+def object_mask(parts, attribs, view_layer_name, names):
+    """Coverage mask of the given object names. Returns (mask, visible) – visible is False
+    when none of the objects is actually in the frame."""
     manifest = _crypto_manifest(attribs, view_layer_name)
-    targets = mask_targets(name)
-    ids = [np.float32(_hex_to_float(h)) for obj, h in manifest.items() if obj in targets]
+    ids = [np.float32(_hex_to_float(h)) for obj, h in manifest.items() if obj in names]
     layers = [_part(parts, view_layer_name, f"CryptoObject0{i}") for i in range(3)]
     layers = [l for l in layers if l is not None]
     if not layers:
@@ -226,18 +227,62 @@ def mask_image(parts, attribs, view_layer_name, name):
         for id_ch, cov_ch in ((0, 1), (2, 3)):
             for target in ids:
                 mask += np.where(layer[:, :, id_ch] == target, layer[:, :, cov_ch], 0.0)
-    return np.clip(mask, 0.0, 1.0), bool(ids)
+    mask = np.clip(mask, 0.0, 1.0)
+    return mask, bool(mask.max() > 0.01)
 
 
-def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
-    """Write all needed control images. Returns ({pass_key: path}, [warnings])."""
+def mask_image(parts, attribs, view_layer_name, name):
+    return object_mask(parts, attribs, view_layer_name, mask_targets(name))
+
+
+def _box_blur(a, r):
+    if r <= 0:
+        return a
+    k = 2 * r + 1
+    for axis in (0, 1):
+        pad = [(0, 0), (0, 0)]
+        pad[axis] = (r + 1, r)
+        c = np.cumsum(np.pad(a, pad, mode="edge"), axis=axis)
+        a = (np.take(c, range(k, c.shape[axis]), axis=axis) - np.take(c, range(0, c.shape[axis] - k), axis=axis)) / k
+    return a
+
+
+def grow_feather(mask, grow=0, feather=0):
+    """Dilate the mask by `grow` pixels, then soften the edge outwards by `feather` pixels.
+    The original area stays fully white."""
+    m = (mask > 0.5).astype(np.float32) if grow or feather else mask
+    for _ in range(grow):
+        m = np.maximum.reduce([m, np.roll(m, 1, 0), np.roll(m, -1, 0), np.roll(m, 1, 1), np.roll(m, -1, 1)])
+    if feather:
+        core = m.copy()
+        for _ in range(feather):  # grow, then blur back: soft falloff outside the core
+            m = np.maximum.reduce([m, np.roll(m, 1, 0), np.roll(m, -1, 0), np.roll(m, 1, 1), np.roll(m, -1, 1)])
+        m = np.maximum(_box_blur(_box_blur(m, feather // 2 + 1), feather // 2 + 1), core)
+    return np.clip(m, 0.0, 1.0)
+
+
+def resize_nearest(a, width, height):
+    h, w = a.shape[:2]
+    if (w, h) == (width, height):
+        return a
+    ys = (np.arange(height) * h / height).astype(int)
+    xs = (np.arange(width) * w / width).astype(int)
+    return a[ys][:, xs]
+
+
+def export(scene, view_layer, needed, out_dir, flip_normal_x=False, masks=None):
+    """Write all needed control images. Returns ({pass_key: path}, [warnings], {mask_key: visible}).
+
+    `masks` = {key: {"names": set, "grow": px, "feather": px, "size": (w, h) or None}} for
+    object masks the add-on builds itself (object prompts, edit selection)."""
+    masks = masks or {}
     if oiio is None:
         raise PassError("OpenImageIO is missing in this Blender build.")
     img = bpy.data.images.get("Render Result")
     if img is None:
         raise PassError("No render yet – render first (F12).")
     os.makedirs(out_dir, exist_ok=True)
-    files, warnings = {}, []
+    files, warnings, visible = {}, [], {}
 
     beauty = os.path.join(out_dir, "cb_beauty.png")
     try:
@@ -247,8 +292,8 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
     files["beauty"] = beauty
 
     rest = [k for k in needed if k != "beauty"]
-    if not rest:
-        return files, warnings
+    if not rest and not masks:
+        return files, warnings, visible
 
     exr = os.path.join(out_dir, "cb_passes.exr")
     _save_render(img, scene, exr, "MULTI_LAYER_IMAGE", "OPEN_EXR_MULTILAYER", "RGBA", "32")
@@ -283,4 +328,13 @@ def export(scene, view_layer, needed, out_dir, flip_normal_x=False):
         else:
             continue
         files[key] = path
-    return files, warnings
+
+    for key, spec in masks.items():
+        mask, seen = object_mask(parts, attribs, vl, spec["names"])
+        mask = grow_feather(mask, spec.get("grow", 0), spec.get("feather", 0))
+        if spec.get("size"):
+            mask = resize_nearest(mask, *spec["size"])
+        path = os.path.join(out_dir, f"cb_{key.replace(':', '_')}.png")
+        write_png(path, mask)
+        files[key], visible[key] = path, seen
+    return files, warnings, visible

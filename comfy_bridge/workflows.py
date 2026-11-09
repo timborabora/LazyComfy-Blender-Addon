@@ -13,6 +13,7 @@ Model files (checkpoints, ControlNets, ...) always appear as dropdowns.
 import glob
 import json
 import os
+import re
 
 from . import comfy_client
 
@@ -76,6 +77,15 @@ def scan(folders):
     return found
 
 
+def is_edit_workflow(path):
+    """Edit workflows take the previous result (BL:result_prev) instead of a fresh render."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return '"bl:result_prev"' in f.read().lower()
+    except OSError:
+        return False
+
+
 def load(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -112,6 +122,10 @@ def analyze(workflow, object_info):
         "params": [],      # dicts, see _param()
         "family": "",
         "warnings": [],
+        "regions": {},     # slot number -> {"apply": id, "mask": id, "prompt": id}
+        "prev_nodes": [],  # BL:result_prev – previous result for editing
+        "selection_nodes": [],
+        "edit_prompt_nodes": [],
     }
     classes = {n["class_type"] for n in workflow.values()}
     if any(c.startswith(("QwenImage", "TextEncodeQwenImage")) for c in classes):
@@ -131,7 +145,17 @@ def analyze(workflow, object_info):
 
         if low.startswith("bl:"):
             tag = low[3:].strip()
-            if tag in PASS_KEYS or tag.startswith("mask_"):
+            region = re.fullmatch(r"region_(\d+)(?:_(mask|prompt))?", tag)
+            if region:
+                slot = result["regions"].setdefault(int(region.group(1)), {})
+                slot[region.group(2) or "apply"] = node_id
+            elif tag == "result_prev":
+                result["prev_nodes"].append(node_id)
+            elif tag == "mask_selection":
+                result["selection_nodes"].append(node_id)
+            elif tag == "edit_prompt":
+                result["edit_prompt_nodes"].append(node_id)
+            elif tag in PASS_KEYS or tag.startswith("mask_"):
                 if "image" not in inputs:
                     result["warnings"].append(f"{title}: node has no image input (use Load Image).")
                 else:
@@ -187,7 +211,11 @@ def analyze(workflow, object_info):
 
     if not result["size_nodes"]:
         result["size_nodes"] = empty_latents
-    if not result["images"]:
+    for n, slot in sorted(result["regions"].items()):
+        if set(slot) != {"apply", "mask", "prompt"}:
+            result["warnings"].append(f"Region {n} needs BL:region_{n}, BL:region_{n}_mask and BL:region_{n}_prompt.")
+    result["regions"] = {n: s for n, s in result["regions"].items() if set(s) == {"apply", "mask", "prompt"}}
+    if not result["images"] and not result["prev_nodes"]:
         result["warnings"].append("No BL:beauty / BL:depth / … node – the workflow gets no image from Blender.")
     return result
 
@@ -227,6 +255,8 @@ def describe(analysis):
     for key in analysis["images"]:
         names.append(PASS_LABELS.get(key, "Mask " + key[5:] if key.startswith("mask:") else key))
     parts.append(", ".join(names) if names else "no Blender input")
+    if analysis["regions"]:
+        parts.append(f"{len(analysis['regions'])} object prompts")
     return "  ·  ".join(parts)
 
 

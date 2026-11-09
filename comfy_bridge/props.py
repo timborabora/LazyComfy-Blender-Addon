@@ -22,9 +22,9 @@ def workflow_folders(context=None):
 
 
 def refresh_workflow_items(context=None):
-    state.workflow_items = [
-        (path, label, path) for path, label, _ in workflows.scan(workflow_folders(context))
-    ]
+    found = workflows.scan(workflow_folders(context))
+    state.workflow_items = [(p, label, p) for p, label, _ in found if not workflows.is_edit_workflow(p)]
+    state.edit_workflow_items = [(p, label, p) for p, label, _ in found if workflows.is_edit_workflow(p)]
     return state.workflow_items
 
 
@@ -32,6 +32,12 @@ def _workflow_items(self, context):
     if not state.workflow_items:
         refresh_workflow_items(context)
     return state.workflow_items or [("", "No workflow found", "")]
+
+
+def _edit_workflow_items(self, context):
+    if not state.edit_workflow_items:
+        refresh_workflow_items(context)
+    return state.edit_workflow_items or [("", "No edit workflow found", "")]
 
 
 def _package_items(self, context):
@@ -134,6 +140,7 @@ class CB_Settings(bpy.types.PropertyGroup):
     workflow_family: bpy.props.StringProperty()
     workflow_needed: bpy.props.StringProperty()
     workflow_warnings: bpy.props.StringProperty()
+    region_slots: bpy.props.IntProperty()
     params: bpy.props.CollectionProperty(type=CB_Param)
     saved_values: bpy.props.StringProperty(default="{}")
 
@@ -165,6 +172,32 @@ class CB_Settings(bpy.types.PropertyGroup):
         default=True,
     )
 
+    region_strength: bpy.props.FloatProperty(
+        name="Object Prompt Strength", min=0.0, max=3.0, default=1.0, precision=2,
+        description="How strongly an object's own prompt wins over the main prompt inside its mask",
+    )
+    edit_workflow: bpy.props.EnumProperty(
+        name="Edit Workflow",
+        description="Workflow that repaints only the selected objects in the last result",
+        items=_edit_workflow_items,
+    )
+    edit_prompt: bpy.props.StringProperty(
+        name="Change",
+        description="What the selected objects should become, e.g. 'green velvet sofa'",
+    )
+    edit_grow: bpy.props.IntProperty(
+        name="Mask Grow", min=0, max=64, default=8, subtype="PIXEL",
+        description="Grow the selection mask so edges and shadows can change too",
+    )
+    edit_feather: bpy.props.IntProperty(
+        name="Mask Feather", min=0, max=64, default=8, subtype="PIXEL",
+        description="Soft falloff outside the grown mask",
+    )
+    last_result: bpy.props.StringProperty(
+        name="Last Result", subtype="FILE_PATH",
+        description="Image the next Edit Selection starts from",
+    )
+
     package: bpy.props.EnumProperty(
         name="Package",
         description="Curated model package: model files plus a ready workflow",
@@ -191,9 +224,14 @@ def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.comfy_bridge = bpy.props.PointerProperty(type=CB_Settings)
+    bpy.types.Object.comfy_prompt = bpy.props.StringProperty(
+        name="Object Prompt",
+        description="Prompt for this object only. Used by workflows with object prompt slots (BL:region_1 …)",
+    )
 
 
 def unregister():
+    del bpy.types.Object.comfy_prompt
     del bpy.types.Scene.comfy_bridge
     for c in reversed(classes):
         bpy.utils.unregister_class(c)

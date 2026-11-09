@@ -15,5 +15,6 @@ download_message = ""  # last download result for the panel
 
 # Blender requires strings of dynamic enum items to stay referenced.
 workflow_items = []
+edit_workflow_items = []
 package_items = []
 enum_item_cache = {}

@@ -106,6 +106,65 @@ class CB_PT_prompts(_Sub, bpy.types.Panel):
                 layout.separator(factor=0.5)
 
 
+class CB_PT_object_prompts(_Sub, bpy.types.Panel):
+    bl_label = "Object Prompts"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.comfy_bridge.region_slots > 0
+
+    def draw(self, context):
+        from . import operators
+        layout = self.layout
+        s = context.scene.comfy_bridge
+        objs = operators.prompt_objects(context.scene, context.view_layer)
+        over = len(objs) > s.region_slots
+        layout.label(text=f"{min(len(objs), s.region_slots)} of {s.region_slots} slots used",
+                     icon="ERROR" if over else "OBJECT_DATAMODE")
+        col = layout.column(align=True)
+        for i, o in enumerate(objs):
+            row = col.row(align=True)
+            row.active = i < s.region_slots
+            row.label(text=o.name, icon="OBJECT_DATA")
+            row.prop(o, "comfy_prompt", text="")
+        if not objs:
+            layout.label(text="Set prompts in Object Properties › Comfy Bridge")
+        layout.separator(factor=0.5)
+        layout.prop(s, "region_strength", slider=True)
+
+
+class CB_PT_edit(_Sub, bpy.types.Panel):
+    bl_label = "Edit Selection"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        import os
+        layout = self.layout
+        s = context.scene.comfy_bridge
+        layout.prop(s, "edit_workflow", text="")
+        layout.prop(s, "edit_prompt", text="", placeholder="e.g. green velvet sofa")
+        row = layout.row(align=True)
+        row.prop(s, "edit_grow", text="Grow")
+        row.prop(s, "edit_feather", text="Feather")
+        col = layout.column()
+        col.scale_y = 1.4
+        col.operator("comfy_bridge.edit_selection", icon="SELECT_SET")
+        if s.last_result:
+            layout.label(text=f"From: {os.path.basename(s.last_result)}  ·  seed {s.last_seed}", icon="IMAGE_DATA")
+        else:
+            layout.label(text="Render & Send first", icon="INFO")
+
+
+class CB_PT_object(bpy.types.Panel):
+    bl_label = "Comfy Bridge"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "object"
+
+    def draw(self, context):
+        self.layout.prop(context.object, "comfy_prompt", text="Prompt")
+
+
 class CB_PT_models(_Sub, bpy.types.Panel):
     bl_label = "Models"
     bl_options = {"DEFAULT_CLOSED"}
@@ -215,7 +274,8 @@ class CB_PT_packages(_Sub, bpy.types.Panel):
             layout.label(text=state.download_message, icon="INFO")
 
 
-classes = (CB_PT_main, CB_PT_prompts, CB_PT_models, CB_PT_settings, CB_PT_advanced, CB_PT_packages)
+classes = (CB_PT_main, CB_PT_prompts, CB_PT_object_prompts, CB_PT_edit, CB_PT_models, CB_PT_settings,
+           CB_PT_advanced, CB_PT_packages, CB_PT_object)
 
 
 def register():

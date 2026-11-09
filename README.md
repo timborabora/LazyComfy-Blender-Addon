@@ -36,6 +36,10 @@ In ComfyUI bauen, einmal dort testen, dann **Workflow → Export (API)** und die
 | `BL:result` | Save Image | gilt als Hauptergebnis |
 | `UI:Name` | beliebig | alle Werte des Nodes erscheinen als Regler im Panel |
 | `UI:Name [a, b]` | beliebig | nur die Eingänge `a` und `b` erscheinen (z. B. `UI:Sampler [steps]`, um `cfg` zu verstecken) |
+| `BL:region_1`, `BL:region_1_mask`, `BL:region_1_prompt` | Conditioning Set Mask, Load Image Mask, Text Encode | ein Slot für einen Objekt-Prompt (Nummer frei, beliebig viele Slots) |
+| `BL:result_prev` | Load Image | Edit-Workflows: das letzte Ergebnis |
+| `BL:mask_selection` | Load Image Mask | Edit-Workflows: Maske der ausgewählten Objekte, vergrößert und weich |
+| `BL:edit_prompt` | Text Encode | Edit-Workflows: Text aus dem Feld „Change“ |
 
 Fehlt `BL:size`, bekommen alle Empty-Latent-Nodes die Auflösung. Modell-Dateien (Checkpoints, ControlNets, VAE, Encoder, LoRAs) erscheinen immer als Dropdown, gefüllt mit dem, was in ComfyUI liegt. ControlNets werden am Dateinamen nach SDXL/Flux gefiltert. „Show All Models“ (Advanced) hebt den Filter auf. Seeds werden in allen KSamplern gesetzt.
 
@@ -50,6 +54,22 @@ Werte, die du im Panel änderst, merkt sich die .blend pro Workflow.
 Benötigte Dateien im ComfyUI-Modellordner: `juggernautXL_ragnarokBy.safetensors`, `controlnet-canny-sdxl.safetensors` (xinsir), `controlnet-depth-sdxl.safetensors` (xinsir), `flux1-dev-Q8_0.gguf`, `t5-v1_1-xxl-encoder-Q8_0.gguf`, `clip_l.safetensors`, `ae.safetensors`, `flux-canny-instantx.safetensors`, `flux-depth-shakker.safetensors`. Für den Flux-Workflow braucht es außerdem die Custom Nodes ComfyUI-GGUF.
 
 Flux.1 dev steht unter der FLUX Non-Commercial License.
+
+## Objekt-Prompts
+
+In den Objekt-Properties hat jedes Objekt unter **Comfy Bridge** ein Feld **Prompt**, z. B. „glossy red lacquer coffee table“ für den Tisch. Workflows mit Objekt-Slots (Beispiel: **SDXL Object Prompts Depth**, 4 Slots) bekommen für jedes sichtbare Objekt mit Prompt eine Cryptomatte-Maske und den Prompt. Der Hauptprompt gilt weiter für den Rest. Der Bereich **Object Prompts** zeigt, wie viele Slots belegt sind, und regelt mit **Object Prompt Strength**, wie stark der Objekt-Prompt in seiner Maske gegen den Hauptprompt gewinnt.
+
+Objekte, die nicht im Bild sind, werden übersprungen. Sind es mehr Objekte als Slots, gehen die ersten (alphabetisch) durch, der Rest wird mit Warnung ausgelassen. Getestet sind 4 Slots im Blockout, mehr Slots gehen mit mehr Nodes im Workflow.
+
+## Edit Selection
+
+Ändert nur die ausgewählten Objekte im letzten Ergebnis:
+
+1. Render & Send.
+2. Objekte im Viewport auswählen, im Bereich **Edit Selection** beschreiben, was sie werden sollen („green velvet sofa“).
+3. **Redo Selection**. Blender rendert die Maske der Auswahl (um **Grow** Pixel vergrößert, um **Feather** Pixel weich), der Edit-Workflow malt mit demselben Seed nur dort neu.
+
+Der Beispiel-Workflow **SDXL Edit Selection** nutzt Juggernaut mit Differential Diffusion und Depth, ein eigenes Inpaint-Modell braucht er nicht. Am Ende setzt `ImageCompositeMasked` das neue Bild nur innerhalb der Maske ein: Außerhalb bleibt jedes Pixel gleich (im Test 0 von 700.000 Pixeln geändert). Das Ergebnis wird wieder zum „letzten Ergebnis“, Edits lassen sich also stapeln. Die PNG enthält den Workflow (`prompt`-Metadaten) und lässt sich zur Feinarbeit in ComfyUI ziehen.
 
 ## Model Packages
 
