@@ -19,7 +19,7 @@ from . import comfy_client
 PASS_KEYS = ("beauty", "depth", "normal", "lineart")
 PASS_LABELS = {"beauty": "Beauty", "depth": "Depth", "normal": "Normal", "lineart": "Line Art"}
 SEED_INPUTS = ("seed", "noise_seed")
-PROMPT_INPUTS = ("text", "t5xxl", "clip_l", "prompt")
+PROMPT_INPUTS = ("text", "t5xxl", "clip_l", "prompt", "negative_prompt")
 FLUX_CLASSES = {"UNETLoader", "UnetLoaderGGUF", "CLIPTextEncodeFlux", "DualCLIPLoader", "DualCLIPLoaderGGUF"}
 
 PRETTY = {
@@ -35,6 +35,9 @@ PRETTY = {
     "low_threshold": "Low",
     "high_threshold": "High",
     "text": "Text",
+    "prompt": "Positive",
+    "negative_prompt": "Negative",
+    "resolution": "Reference Resolution",
     "t5xxl": "T5 (sentences)",
     "clip_l": "CLIP-L (keywords)",
     "ckpt_name": "Checkpoint",
@@ -106,12 +109,14 @@ def analyze(workflow, object_info):
         "images": {},      # pass_key -> [node_id]
         "size_nodes": [],
         "result_nodes": [],
-        "params": [],      # dicts, siehe _param()
+        "params": [],      # dicts, see _param()
         "family": "",
         "warnings": [],
     }
     classes = {n["class_type"] for n in workflow.values()}
-    if classes & FLUX_CLASSES:
+    if any(c.startswith(("QwenImage", "TextEncodeQwenImage")) for c in classes):
+        result["family"] = "Qwen-Image"
+    elif classes & FLUX_CLASSES:
         result["family"] = "Flux"
     elif "CheckpointLoaderSimple" in classes:
         result["family"] = "SDXL"
@@ -141,6 +146,12 @@ def analyze(workflow, object_info):
 
         exposed = low.startswith("ui:")
         label_base = title[3:].strip() if exposed else (title or cls)
+        only = None
+        # "UI:Prompt [prompt]" exposes only the inputs listed in brackets
+        if exposed and label_base.endswith("]") and "[" in label_base:
+            label_base, _, listed = label_base[:-1].partition("[")
+            label_base = label_base.strip()
+            only = {n.strip() for n in listed.split(",") if n.strip()}
         literal = [(k, v) for k, v in inputs.items() if not is_link(v)]
         specs = {k: comfy_client.parse_spec(comfy_client.spec_of(object_info, cls, k)) for k, _ in literal}
         model_inputs = [k for k, v in literal if specs[k][0] == "ENUM" and _is_model_value(v, specs[k][1].get("options"))]
@@ -158,14 +169,20 @@ def analyze(workflow, object_info):
                     label = _pretty(name)
                 result["params"].append(_param(node_id, cls, name, label, "model", "ENUM", value, opts))
                 continue
-            if not exposed or name in SEED_INPUTS or name == "image":
+            if not exposed or name in SEED_INPUTS or name == "image" or (only is not None and name not in only):
                 continue
             ui_inputs.append((name, value, kind, opts))
+        prompt_count = sum(1 for n, v, k, o in ui_inputs if _is_prompt(n, v, k, o))
         for name, value, kind, opts in ui_inputs:
             if kind is None:
                 kind = {bool: "BOOLEAN", int: "INT", float: "FLOAT"}.get(type(value), "STRING")
-            label = label_base if len(ui_inputs) == 1 else f"{label_base} · {_pretty(name)}"
-            section = "prompt" if kind == "STRING" and (opts.get("multiline") or name in PROMPT_INPUTS) else "param"
+            section = "prompt" if _is_prompt(name, value, kind, opts) else "param"
+            if len(ui_inputs) == 1:
+                label = label_base
+            elif section == "prompt" and prompt_count > 1:
+                label = _pretty(name)  # e.g. "Positive" / "Negative" instead of "Prompt · Positive"
+            else:
+                label = f"{label_base} · {_pretty(name)}"
             result["params"].append(_param(node_id, cls, name, label, section, kind, value, opts))
 
     if not result["size_nodes"]:
@@ -173,6 +190,11 @@ def analyze(workflow, object_info):
     if not result["images"]:
         result["warnings"].append("No BL:beauty / BL:depth / … node – the workflow gets no image from Blender.")
     return result
+
+
+def _is_prompt(name, value, kind, opts):
+    is_string = kind == "STRING" or (kind is None and isinstance(value, str))
+    return is_string and (opts.get("multiline") or name in PROMPT_INPUTS)
 
 
 def _param(node_id, cls, name, label, section, kind, value, opts):
