@@ -27,6 +27,9 @@ if (-not $zip) { throw "Paket comfy_bridge-$version.zip wurde nicht gebaut." }
 Write-Host "Version $version gebaut: $($zip.FullName)"
 if ($DryRun) { Write-Host "DryRun: kein Release angelegt."; exit 0 }
 
+# git and gh report progress on stderr; with "Stop" Windows PowerShell treats that as an error
+$ErrorActionPreference = "Continue"
 git -C $root tag "v$version"
 git -C $root push origin "v$version"
+if ($LASTEXITCODE -ne 0) { throw "Pushing tag v$version failed." }
 & $gh release create "v$version" $zip.FullName (Join-Path $dist "index.json") --repo (git -C $root remote get-url origin) --title "Comfy Bridge $version" --notes "Comfy Bridge $version"

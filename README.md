@@ -65,4 +65,6 @@ blender -b --python tests/blockout_test.py -- SDXL_Canny_Depth.json
 
 `tests/blockout_test.py` baut einen Blockout-Raum, rendert ihn und schickt ihn durch ComfyUI (ComfyUI muss laufen). `tests/passes_test.py` prüft nur die Pässe.
 
-Releases: `tools/release.ps1` baut das Paket und den Extension-Index und legt ein GitHub-Release an. In Blender wird einmal `https://github.com/timborabora/comfy_bridge/releases/latest/download/index.json` als Remote Repository eingetragen. Danach bietet Blender neue Versionen selbst an.
+Für einen eigenen Entwicklungsstand ohne Release statt `-r user_default` lokal installieren. Die Version aus dem Update-Repo vorher entfernen (`blender --command extension remove comfy_bridge_github.comfy_bridge`).
+
+Releases: Version in `comfy_bridge/blender_manifest.toml` erhöhen, committen, pushen, dann `tools/release.ps1`. Das Skript baut das Paket und den Extension-Index und legt ein GitHub-Release an. In Blender wird einmal `https://github.com/timborabora/comfy_bridge/releases/latest/download/index.json` als Remote Repository eingetragen. Danach bietet Blender neue Versionen selbst an.
