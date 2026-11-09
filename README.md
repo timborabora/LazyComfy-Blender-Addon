@@ -35,6 +35,7 @@ In ComfyUI bauen, einmal dort testen, dann **Workflow → Export (API)** und die
 | `BL:size` | Empty Latent Image | bekommt die Render-Auflösung (auf 8 gerundet) |
 | `BL:result` | Save Image | gilt als Hauptergebnis |
 | `UI:Name` | beliebig | alle Werte des Nodes erscheinen als Regler im Panel |
+| `UI:Name [a, b]` | beliebig | nur die Eingänge `a` und `b` erscheinen (z. B. `UI:Sampler [steps]`, um `cfg` zu verstecken) |
 
 Fehlt `BL:size`, bekommen alle Empty-Latent-Nodes die Auflösung. Modell-Dateien (Checkpoints, ControlNets, VAE, Encoder, LoRAs) erscheinen immer als Dropdown, gefüllt mit dem, was in ComfyUI liegt. ControlNets werden am Dateinamen nach SDXL/Flux gefiltert. „Show All Models“ (Advanced) hebt den Filter auf. Seeds werden in allen KSamplern gesetzt.
 
@@ -43,11 +44,24 @@ Werte, die du im Panel änderst, merkt sich die .blend pro Workflow.
 ## Mitgelieferte Beispiele
 
 - **SDXL Canny Depth**: Juggernaut XL, Canny aus dem Beauty-Render plus Depth aus Blender.
-- **Flux GGUF Canny Depth**: Flux.1 dev Q8 (GGUF), InstantX Canny, Shakker Depth.
+- **Flux GGUF Canny Depth**: Flux.1 dev Q8 (GGUF), InstantX Canny, Shakker Depth. Auf 16 GB VRAM sehr langsam.
+- **Qwen-Image 2.1 Depth – research license**: Qwen-Image 2.1 (int8) mit Fun ControlNet Union auf dem Depth-Pass. Hält die Blockout-Geometrie am genauesten ein, etwa 23 s pro Bild auf einer RTX 4080. Lizenz qwen-research: nur zur Evaluierung, nicht kommerziell.
 
 Benötigte Dateien im ComfyUI-Modellordner: `juggernautXL_ragnarokBy.safetensors`, `controlnet-canny-sdxl.safetensors` (xinsir), `controlnet-depth-sdxl.safetensors` (xinsir), `flux1-dev-Q8_0.gguf`, `t5-v1_1-xxl-encoder-Q8_0.gguf`, `clip_l.safetensors`, `ae.safetensors`, `flux-canny-instantx.safetensors`, `flux-depth-shakker.safetensors`. Für den Flux-Workflow braucht es außerdem die Custom Nodes ComfyUI-GGUF.
 
 Flux.1 dev steht unter der FLUX Non-Commercial License.
+
+## Model Packages
+
+Im Bereich **Model Packages** installiert ein Klick die Modelldateien eines Pakets samt passendem Workflow. Der Katalog (`comfy_bridge/catalog.json`) kommt mit dem Add-on und enthält pro Datei Quelle, Zielordner, Größe und SHA256, pro Paket Lizenz, VRAM-Bedarf und die nötigen ComfyUI-Nodes.
+
+- Vor dem Download zeigt ein Dialog Größe, freien Speicher und Lizenz.
+- Geladen wird im Hintergrund. Ein abgebrochener Download macht beim nächsten Mal dort weiter (`.part`-Datei).
+- Jede Datei wird gegen ihren SHA256 geprüft und erst danach in den Modellordner verschoben.
+- Zielordner ist der Modellordner aus den Comfy-Desktop-Einstellungen. In den Add-on-Einstellungen lässt er sich ändern.
+- **Delete** löscht nur Dateien, die kein anderes installiertes Paket braucht.
+- Es gibt keine freie URL-Eingabe. Custom Nodes installiert das Add-on nicht, es meldet nur, wenn welche fehlen.
+- Ein Hugging-Face-Token für gesperrte Modelle gehört in die Add-on-Einstellungen, nie in die .blend. Die aktuellen Pakete brauchen keinen.
 
 ## Hinweise
 

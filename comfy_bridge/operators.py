@@ -8,7 +8,7 @@ import time
 
 import bpy
 
-from . import comfy_client, passes, pipeline, props, state, workflows
+from . import comfy_client, installer, passes, pipeline, props, state, workflows
 from .comfy_client import ComfyError
 
 HISTORY_TEXT = "ComfyBridge_History"
@@ -456,7 +456,142 @@ class CB_OT_show_text(bpy.types.Operator):
         return {"FINISHED"}
 
 
+# ---------------------------------------------------------------- model packages
+
+def models_dir():
+    p = prefs()
+    if p and p.models_dir:
+        return bpy.path.abspath(p.models_dir)
+    return installer.comfy_desktop_models_dir()
+
+
+def _select_workflow(scene, filename):
+    props.refresh_workflow_items()
+    for path, _, _ in state.workflow_items:
+        if os.path.basename(path) == filename:
+            scene.comfy_bridge.workflow = path
+            return True
+    return False
+
+
+def _draw_package_facts(layout, pkg, root):
+    st, todo = installer.status(root, pkg)
+    col = layout.column(align=True)
+    col.label(text=f"Download: {installer.human_size(todo)}   ·   Free: {installer.human_size(installer.free_space(root))}",
+              icon="IMPORT")
+    lic = pkg["license"]
+    col.label(text=f"License: {lic['name']}", icon="CHECKMARK" if lic["commercial"] else "ERROR")
+    col.label(text="Commercial use: " + ("yes" if lic["commercial"] else "no") + f"  –  {lic['note']}")
+    col.label(text=f"Needs about {pkg['vram_gb']} GB VRAM", icon="MEMORY")
+    missing = installer.missing_nodes(pkg, state.object_info) if state.object_info else []
+    if missing:
+        col.label(text="Missing ComfyUI nodes: " + ", ".join(missing), icon="ERROR")
+
+
+class CB_OT_install_package(bpy.types.Operator):
+    bl_idname = "comfy_bridge.install_package"
+    bl_label = "Install Package"
+    bl_description = "Download the package's model files into ComfyUI's models folder and select its workflow"
+
+    @classmethod
+    def poll(cls, context):
+        return state.download is None
+
+    def invoke(self, context, event):
+        if not models_dir():
+            self.report({"ERROR"}, "No ComfyUI models folder found. Set one in the add-on preferences.")
+            return {"CANCELLED"}
+        return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Download")
+
+    def draw(self, context):
+        pkg = installer.package(context.scene.comfy_bridge.package)
+        self.layout.label(text=pkg["name"], icon="PACKAGE")
+        _draw_package_facts(self.layout, pkg, models_dir())
+        self.layout.label(text=f"Into: {models_dir()}")
+
+    def execute(self, context):
+        pkg = installer.package(context.scene.comfy_bridge.package)
+        root = models_dir()
+        if not root:
+            self.report({"ERROR"}, "No ComfyUI models folder found. Set one in the add-on preferences.")
+            return {"CANCELLED"}
+        _, todo = installer.status(root, pkg)
+        if todo > installer.free_space(root):
+            self.report({"ERROR"}, f"Not enough disk space: {installer.human_size(todo)} needed.")
+            return {"CANCELLED"}
+        p = prefs()
+        dl = installer.Download(pkg, root, p.hf_token if p else "")
+        state.download, state.download_message = dl, ""
+        dl.start()
+        scene_name = context.scene.name
+
+        def poll():
+            tag_redraw()
+            if not dl.done:
+                return 0.5
+            state.download = None
+            if dl.error:
+                state.download_message = dl.error
+            elif dl.cancelled:
+                state.download_message = "Download cancelled – it resumes where it stopped."
+            else:
+                state.download_message = f"{pkg['name']} installed."
+                scene = bpy.data.scenes.get(scene_name)
+                if scene:
+                    _select_workflow(scene, pkg["workflow"])
+                connect_async()  # ComfyUI lists the new files after a refresh
+            tag_redraw()
+            return None
+
+        bpy.app.timers.register(poll, first_interval=0.5, persistent=True)
+        return {"FINISHED"}
+
+
+class CB_OT_cancel_download(bpy.types.Operator):
+    bl_idname = "comfy_bridge.cancel_download"
+    bl_label = "Cancel Download"
+    bl_description = "Stop the download. It resumes later where it stopped"
+
+    def execute(self, context):
+        if state.download:
+            state.download.cancel()
+        return {"FINISHED"}
+
+
+class CB_OT_delete_package(bpy.types.Operator):
+    bl_idname = "comfy_bridge.delete_package"
+    bl_label = "Delete Package Files"
+    bl_description = "Permanently delete this package's model files (files used by another installed package stay)"
+
+    @classmethod
+    def poll(cls, context):
+        return state.download is None
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Delete")
+
+    def draw(self, context):
+        pkg = installer.package(context.scene.comfy_bridge.package)
+        files = installer.removable_files(models_dir(), pkg)
+        self.layout.label(text=f"Permanently delete {len(files)} file(s)? This can't be undone.", icon="ERROR")
+        col = self.layout.column(align=True)
+        for f in files:
+            col.label(text=os.path.basename(f))
+
+    def execute(self, context):
+        pkg = installer.package(context.scene.comfy_bridge.package)
+        files = installer.removable_files(models_dir(), pkg)
+        for f in files:
+            os.remove(f)
+        state.download_message = f"Deleted {len(files)} file(s) of {pkg['name']}."
+        connect_async()
+        return {"FINISHED"}
+
+
 classes = (
+    CB_OT_install_package,
+    CB_OT_cancel_download,
+    CB_OT_delete_package,
     CB_OT_connect,
     CB_OT_reload_workflows,
     CB_OT_open_folder,

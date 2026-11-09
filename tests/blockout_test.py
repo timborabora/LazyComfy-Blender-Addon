@@ -64,7 +64,10 @@ scene.render.resolution_x, scene.render.resolution_y = 1024, 768
 scene.render.resolution_percentage = 100
 
 os.makedirs(os.path.dirname(os.path.abspath(BLEND)), exist_ok=True)
-bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(BLEND))
+bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(BLEND), compress=True)
+if WORKFLOW == "none":  # only (re)build the example scene
+    print("TEST scene saved", os.path.abspath(BLEND))
+    sys.exit(0)
 
 base = ops.connect_sync()
 print("TEST server", base, st.stats["system"]["comfyui_version"])

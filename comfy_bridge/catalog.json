@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "id": "sdxl_canny_depth",
+      "name": "SDXL Canny + Depth",
+      "description": "Juggernaut XL Ragnarok with xinsir Canny and Depth ControlNets. Fast, good for quick iterations.",
+      "workflow": "SDXL_Canny_Depth.json",
+      "vram_gb": 8,
+      "license": {"name": "CreativeML Open RAIL++-M / Apache 2.0", "commercial": true,
+                  "note": "Commercial use of generated images allowed, see model pages."},
+      "required_nodes": [],
+      "files": [
+        {"dir": "checkpoints", "name": "juggernautXL_ragnarokBy.safetensors",
+         "url": "https://civitai.com/api/download/models/1759168",
+         "size": 7105350162, "sha256": "dd08fa32f98d05a2443ca1419e46df1575a0811f6e3b246d9dd47ff20f5eb66a"},
+        {"dir": "controlnet", "name": "controlnet-canny-sdxl.safetensors",
+         "url": "https://huggingface.co/xinsir/controlnet-canny-sdxl-1.0/resolve/main/diffusion_pytorch_model.safetensors",
+         "size": 2502139104, "sha256": "bf47cd757ceaf2572c53321329ef819ea38c09a6e3783588387913cd94dff47c"},
+        {"dir": "controlnet", "name": "controlnet-depth-sdxl.safetensors",
+         "url": "https://huggingface.co/xinsir/controlnet-depth-sdxl-1.0/resolve/main/diffusion_pytorch_model.safetensors",
+         "size": 2502139104, "sha256": "ea3770af4c33ea8ba8dccc0106ec5d5c5c6e504eb382119a3ccac3c9d973d344"}
+      ]
+    },
+    {
+      "id": "qwen_image_21_depth",
+      "name": "Qwen-Image 2.1 + ControlNet Union",
+      "description": "Qwen-Image 2.1 (int8) with the Fun ControlNet Union for depth. Follows the Blender depth pass very closely.",
+      "workflow": "Qwen-Image_2.1_Depth_-_research_license.json",
+      "vram_gb": 16,
+      "license": {"name": "qwen-research", "commercial": false,
+                  "note": "Research and evaluation only, no commercial use."},
+      "required_nodes": ["QwenImage21Cache", "TextEncodeQwenImage21", "QwenImageDiffsynthControlnet", "ModelPatchLoader"],
+      "files": [
+        {"dir": "diffusion_models", "name": "qwen_image_2.1_int8_convrot.safetensors",
+         "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+         "size": 7256783064, "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d"},
+        {"dir": "text_encoders", "name": "qwen3vl_8b_int8_convrot.safetensors",
+         "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+         "size": 9350798360, "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f"},
+        {"dir": "vae", "name": "qwen_image_2.1_vae_bf16.safetensors",
+         "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+         "size": 675509688, "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9"},
+        {"dir": "model_patches", "name": "qwen_image_2.1_fun_controlnet_union_int8_convrot.safetensors",
+         "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/model_patches/qwen_image_2.1_fun_controlnet_union_int8_convrot.safetensors",
+         "size": 3779298944, "sha256": "07aa961570ac0e03d4ca936aecd76854d077a33cde69b5092399afba01b3715d"}
+      ]
+    },
+    {
+      "id": "flux_gguf_canny_depth",
+      "name": "Flux.1 dev GGUF Q8 + Canny/Depth",
+      "description": "Flux.1 dev (GGUF Q8) with InstantX Canny and Shakker Depth. Very slow on 16 GB VRAM.",
+      "workflow": "Flux_GGUF_Canny_Depth.json",
+      "vram_gb": 24,
+      "license": {"name": "FLUX.1 [dev] Non-Commercial", "commercial": false,
+                  "note": "Non-commercial license for the model weights."},
+      "required_nodes": ["UnetLoaderGGUF", "DualCLIPLoaderGGUF"],
+      "files": [
+        {"dir": "unet", "name": "flux1-dev-Q8_0.gguf",
+         "url": "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf",
+         "size": 12708281504, "sha256": "129032f32224bf7138f16e18673d8008ba5f84c1ec74063bf4511a8bb4cf553d"},
+        {"dir": "text_encoders", "name": "t5-v1_1-xxl-encoder-Q8_0.gguf",
+         "url": "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/t5-v1_1-xxl-encoder-Q8_0.gguf",
+         "size": 5061584064, "sha256": "9ec60f6028534b7fe5af439fcb535d75a68592a9ca3fcdeb175ef89e3ee99825"},
+        {"dir": "clip", "name": "clip_l.safetensors",
+         "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
+         "size": 246144152, "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd"},
+        {"dir": "vae", "name": "ae.safetensors",
+         "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/split_files/vae/ae.safetensors",
+         "size": 335304388, "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"},
+        {"dir": "controlnet", "name": "flux-canny-instantx.safetensors",
+         "url": "https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny/resolve/main/diffusion_pytorch_model.safetensors",
+         "size": 3583232168, "sha256": "55b8b2c5f8aeca6d833e70af24585b44e26a6cd25d3076471272b61dbbef6e83"},
+        {"dir": "controlnet", "name": "flux-depth-shakker.safetensors",
+         "url": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-ControlNet-Depth/resolve/main/diffusion_pytorch_model.safetensors",
+         "size": 3186751144, "sha256": "a4ba307773cb1f51c815f5b8ddf76b199465f3e89a05676f9a0bcab9d5a23d2b"}
+      ]
+    }
+  ]
+}

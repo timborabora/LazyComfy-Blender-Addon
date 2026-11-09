@@ -26,12 +26,25 @@ class CB_Preferences(bpy.types.AddonPreferences):
         description="Empty = folder 'comfy_bridge_output' next to the .blend file (or temp if unsaved)",
         subtype="DIR_PATH",
     )
+    models_dir: bpy.props.StringProperty(
+        name="ComfyUI Models Folder",
+        description="Where model packages are installed. Empty = models folder from Comfy Desktop's settings",
+        subtype="DIR_PATH",
+    )
+    hf_token: bpy.props.StringProperty(
+        name="Hugging Face Token",
+        description="Only needed for gated models. Stored in Blender's preferences, never in .blend files",
+        subtype="PASSWORD",
+    )
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "server_url")
         layout.prop(self, "workflow_dir")
         layout.prop(self, "output_dir")
+        layout.separator()
+        layout.prop(self, "models_dir")
+        layout.prop(self, "hf_token")
 
 
 def _auto_connect():

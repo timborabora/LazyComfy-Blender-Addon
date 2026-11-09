@@ -169,7 +169,53 @@ class CB_PT_advanced(_Sub, bpy.types.Panel):
         col.prop(s, "show_all_models")
 
 
-classes = (CB_PT_main, CB_PT_prompts, CB_PT_models, CB_PT_settings, CB_PT_advanced)
+class CB_PT_packages(_Sub, bpy.types.Panel):
+    bl_label = "Model Packages"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        from . import installer, operators
+        layout = self.layout
+        s = context.scene.comfy_bridge
+        layout.prop(s, "package", text="")
+        pkg = installer.package(s.package)
+        if not pkg:
+            return
+        root = operators.models_dir()
+        status, todo = installer.status(root, pkg)
+        box = layout.box()
+        icon = {"installed": "CHECKMARK", "partial": "INFO", "missing": "IMPORT"}[status]
+        text = {"installed": "Installed", "partial": f"Partly installed · {installer.human_size(todo)} missing",
+                "missing": f"Not installed · {installer.human_size(todo)}"}[status]
+        box.label(text=text, icon=icon)
+        lic = pkg["license"]
+        box.label(text=f"{lic['name']}" + ("" if lic["commercial"] else "  ·  non-commercial"),
+                  icon="CHECKMARK" if lic["commercial"] else "ERROR")
+        box.label(text=f"About {pkg['vram_gb']} GB VRAM", icon="MEMORY")
+        if state.object_info:
+            missing = installer.missing_nodes(pkg, state.object_info)
+            if missing:
+                box.label(text="Missing nodes: " + ", ".join(missing), icon="ERROR")
+        if not root:
+            box.label(text="No models folder – set it in the preferences", icon="ERROR")
+
+        dl = state.download
+        if dl is not None:
+            row = layout.row(align=True)
+            row.progress(factor=dl.progress, text=f"{dl.current}  ·  {installer.human_size(dl.done_bytes)} / {installer.human_size(dl.total)}")
+            row.operator("comfy_bridge.cancel_download", text="", icon="CANCEL")
+        else:
+            row = layout.row(align=True)
+            row.scale_y = 1.3
+            if status != "installed":
+                row.operator("comfy_bridge.install_package", text="Install", icon="IMPORT")
+            if status != "missing":
+                row.operator("comfy_bridge.delete_package", text="Delete", icon="TRASH")
+        if state.download_message:
+            layout.label(text=state.download_message, icon="INFO")
+
+
+classes = (CB_PT_main, CB_PT_prompts, CB_PT_models, CB_PT_settings, CB_PT_advanced, CB_PT_packages)
 
 
 def register():

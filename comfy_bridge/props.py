@@ -34,6 +34,13 @@ def _workflow_items(self, context):
     return state.workflow_items or [("", "No workflow found", "")]
 
 
+def _package_items(self, context):
+    if not state.package_items:
+        from . import installer
+        state.package_items = [(p["id"], p["name"], p["description"]) for p in installer.load_catalog()]
+    return state.package_items
+
+
 def _on_workflow_changed(self, context):
     from . import operators
     operators.rebuild_params(context.scene, save_old=True, from_user=True)
@@ -156,6 +163,12 @@ class CB_Settings(bpy.types.PropertyGroup):
         name="Show Result",
         description="Show the result in all open Image Editors",
         default=True,
+    )
+
+    package: bpy.props.EnumProperty(
+        name="Package",
+        description="Curated model package: model files plus a ready workflow",
+        items=_package_items,
     )
 
     running: bpy.props.BoolProperty()
