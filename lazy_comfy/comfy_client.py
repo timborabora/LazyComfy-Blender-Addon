@@ -23,8 +23,8 @@ class ComfyError(RuntimeError):
     pass
 
 
-def _request(url, data=None, headers=None, timeout=10.0):
-    req = urllib.request.Request(url, data=data, headers=headers or {})
+def _request(url, data=None, headers=None, timeout=10.0, method=None):
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status, resp.read()

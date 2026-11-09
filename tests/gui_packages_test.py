@@ -28,10 +28,10 @@ def step():
             s.package = args[1]
         panel = args[2] if len(args) > 2 else "LC_PT_packages"
         if panel == "LC_PT_main":
-            s.workflow = next(p for p, _, _ in st.workflow_items if p.endswith("Depth + Objects + Inpaint.json"))
+            s.workflow = next(p for p, _, _ in st.workflow_items if "Depth + Objects + Inpaint" in p)
             bpy.data.objects["Table"].lazy_comfy_prompt = "glossy red lacquer coffee table"
         elif panel in ("LC_PT_object_prompts", "LC_PT_edit"):
-            s.workflow = next(p for p, _, _ in st.workflow_items if p.endswith("SDXL_Object_Prompts_Depth.json"))
+            s.workflow = next(p for p, _, _ in st.workflow_items if "Depth + Objects + Inpaint" in p)
             bpy.data.objects["Table"].lazy_comfy_prompt = "glossy red lacquer coffee table"
             bpy.data.objects["Shelf"].lazy_comfy_prompt = "white carrara marble bookshelf"
         if panel == "LC_PT_main":

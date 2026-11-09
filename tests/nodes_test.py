@@ -2,7 +2,7 @@
 
 blender -b examples/blockout_room.blend --python tests/nodes_test.py -- <output folder>
 1. Examples are shipped and listed from ComfyUI's workflow folder.
-2. "SDXL · Canny + Depth" with the old BL: workflow's settings gives the same image.
+2. "SDXL · Line Art + Depth" renders.
 3. "SDXL · Depth + Objects + Inpaint": object prompts, then Redo Selection on the sofa.
 Never saves the opened .blend.
 """
@@ -19,6 +19,9 @@ os.makedirs(out, exist_ok=True)
 mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod, default_set=True)
 bpy.context.preferences.addons[mod].preferences.show_api_files = True  # old API-file examples
+import os as _os
+bpy.context.preferences.addons[mod].preferences.workflow_dir = _os.path.join(
+    _os.path.dirname(_os.path.abspath(__file__)), "fixtures", "api_workflows")
 ops, st, pr, passes = (sys.modules[mod + x] for x in (".operators", ".state", ".props", ".passes"))
 bpy.context.preferences.addons[mod].preferences.output_dir = out
 scene, layer = bpy.context.scene, bpy.context.view_layer
@@ -62,24 +65,12 @@ def setting(label, value):
 
 s.seed_random, s.seed = False, 4242
 
-# 2) old BL: workflow vs. node template with the same settings
-s.workflow = next(i for i, _, _ in st.workflow_items if i.endswith("SDXL_Canny_Depth.json"))
+# 2) line art template
+pick("Line Art + Depth (Quick iterations).json")
 render_and_run()
-old = s.last_result
-pick("SDXL · Canny + Depth.json")
-for label, value in (("Canny Strength", 0.8), ("Canny End", 0.8), ("Depth Strength", 0.6), ("Depth End", 0.8), ("Steps", 25)):
-    setting(label, value)
-next(p for p in s.params if p.label == "Prompt").set_value(
-    "RAW photo, modern living room, concrete walls, oak floor, large windows, soft daylight, photorealistic, 8k uhd, DSLR")
-next(p for p in s.params if p.label == "Negative").set_value(
-    "cartoon, illustration, drawing, painting, cgi, 3d render, plastic, anime, sketch, blurry")
-render_and_run()
-new = s.last_result
-d = np.abs(load(old) - load(new))
-print(f"TEST old vs node template: max diff={int(d.max())} mean={float(d.mean()):.3f}")
 
 # 3) objects + Redo Selection on the node template
-pick("SDXL · Depth + Objects + Inpaint.json")
+pick("Depth + Objects + Inpaint (Per-object control & fixes).json")
 bpy.data.objects["Table"].lazy_comfy_prompt = "glossy red lacquer coffee table"
 bpy.data.objects["Shelf"].lazy_comfy_prompt = "white carrara marble bookshelf"
 s.seed = 777

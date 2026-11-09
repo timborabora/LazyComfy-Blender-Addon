@@ -16,6 +16,9 @@ os.makedirs(out, exist_ok=True)
 mod = next(m.__name__ for m in addon_utils.modules() if m.__name__.endswith("lazy_comfy"))
 addon_utils.enable(mod, default_set=True)
 bpy.context.preferences.addons[mod].preferences.show_api_files = True  # old API-file examples
+import os as _os
+bpy.context.preferences.addons[mod].preferences.workflow_dir = _os.path.join(
+    _os.path.dirname(_os.path.abspath(__file__)), "fixtures", "api_workflows")
 ops = sys.modules[mod + ".operators"]
 st = sys.modules[mod + ".state"]
 pr = sys.modules[mod + ".props"]

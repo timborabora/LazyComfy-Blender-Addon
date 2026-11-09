@@ -536,13 +536,16 @@ class LC_OT_open_folder(bpy.types.Operator):
     def description(cls, context, properties):
         if properties.which == "OUTPUT":
             return "Open the folder where results are saved"
-        return "Open the workflow folder. Add your own workflows here (ComfyUI: Workflow > Export (API))"
+        return "Open ComfyUI's workflow folder (where Ctrl+S saves)"
 
     def execute(self, context):
         if self.which == "OUTPUT":
             folder = _output_dir()
         else:
-            folder = props.workflow_folders(context)[0][0]
+            folder = os.path.join(comfyui_dir(), "user", "default", "workflows") if comfyui_dir() else ""
+            if not folder:
+                self.report({"ERROR"}, "ComfyUI folder not found. Set it in the add-on preferences.")
+                return {"CANCELLED"}
         os.makedirs(folder, exist_ok=True)
         bpy.ops.wm.path_open(filepath=folder)
         return {"FINISHED"}
@@ -747,8 +750,7 @@ def _draw_package_facts(layout, pkg, root):
     col.label(text=f"Download: {installer.human_size(todo)}   ·   Free: {installer.human_size(installer.free_space(root))}",
               icon="IMPORT")
     lic = pkg["license"]
-    col.label(text=f"License: {lic['name']}", icon="CHECKMARK" if lic["commercial"] else "ERROR")
-    col.label(text="Commercial use: " + ("yes" if lic["commercial"] else "no") + f"  –  {lic['note']}")
+    col.label(text=f"License: {lic['name']} – {lic['note']}", icon="INFO")
     col.label(text=f"Needs about {pkg['vram_gb']} GB VRAM", icon="MEMORY")
     missing = installer.missing_nodes(pkg, state.object_info) if state.object_info else []
     if missing:

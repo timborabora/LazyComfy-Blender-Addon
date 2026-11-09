@@ -249,8 +249,7 @@ class LC_PT_advanced(_Sub, bpy.types.Panel):
                 lic = pkg["license"]
                 col = body.column(align=True)
                 col.label(text=text, icon="CHECKMARK" if status == "installed" else "IMPORT")
-                col.label(text=lic["name"] + ("" if lic["commercial"] else " · non-commercial"),
-                          icon="CHECKMARK" if lic["commercial"] else "ERROR")
+                col.label(text=f"License: {lic['name']}", icon="INFO")
                 col.label(text=f"About {pkg['vram_gb']} GB VRAM", icon="MEMORY")
                 dl = state.download
                 if dl is not None:

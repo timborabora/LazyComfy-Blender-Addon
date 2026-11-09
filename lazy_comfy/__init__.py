@@ -9,6 +9,10 @@ import bpy
 from . import migrate, operators, props, state, ui
 
 
+def _refresh_menu(self, context):
+    props.refresh_workflow_items(context)
+
+
 class LC_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
@@ -17,14 +21,15 @@ class LC_Preferences(bpy.types.AddonPreferences):
         description="Leave empty to search automatically (ports 8188, 8000, …). Otherwise e.g. http://127.0.0.1:8188",
     )
     workflow_dir: bpy.props.StringProperty(
-        name="Workflow Folder",
-        description="Folder with your own workflows (API JSON). The bundled examples stay available",
+        name="API Workflow Folder",
+        description="Folder with API-format JSON workflows (old BL:/UI: title convention). Shown with Show API Files",
         subtype="DIR_PATH",
+        update=_refresh_menu,
     )
     show_api_files: bpy.props.BoolProperty(
         name="Show API Files",
-        description="Also list API-format JSON files (old BL:/UI: title convention) in the workflow menu",
-        update=lambda self, ctx: props.refresh_workflow_items(ctx) and None,
+        description="Also list API-format JSON files from the API workflow folder in the workflow menu",
+        update=_refresh_menu,
     )
     output_dir: bpy.props.StringProperty(
         name="Output Folder",

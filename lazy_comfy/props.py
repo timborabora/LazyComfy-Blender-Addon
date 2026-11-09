@@ -13,12 +13,10 @@ def _addon_prefs(context=None):
 
 
 def workflow_folders(context=None):
-    folders = [(os.path.join(os.path.dirname(__file__), "workflows"), True)]
+    """Folder with API-format JSON files (old title convention) – only the one set in the preferences."""
     prefs = _addon_prefs(context)
     user = prefs.workflow_dir if prefs else ""
-    if user:
-        folders.insert(0, (bpy.path.abspath(user), False))
-    return folders
+    return [(bpy.path.abspath(user), False)] if user else []
 
 
 def refresh_workflow_items(context=None):
@@ -28,9 +26,12 @@ def refresh_workflow_items(context=None):
     names = [os.path.basename(label) for _, label, _ in state.comfy_index]
     comfy = []
     for (ident, label, _), name in zip(state.comfy_index, names):
+        shown, tooltip = workflows.display_info(state.comfy_workflows.get(ident, {}).get("ui") or {}, name)
         folder = os.path.dirname(label)
-        shown = name if names.count(name) == 1 or not folder else f"{name}  ({folder})"
-        comfy.append((ident, shown, "Saved in ComfyUI: Workflows/" + ident[len(workflows.COMFY_PREFIX):]))
+        if names.count(name) > 1 and folder:
+            shown = f"{shown}  ({folder})"
+        where = "Saved in ComfyUI: Workflows/" + ident[len(workflows.COMFY_PREFIX):]
+        comfy.append((ident, shown, f"{tooltip}\n{where}" if tooltip else where))
     api_main = [(p, label + "  [API file]", p) for p, label, _ in found if not workflows.is_edit_workflow(p)]
     api_edit = [(p, label + "  [API file]", p) for p, label, _ in found if workflows.is_edit_workflow(p)]
     state.workflow_items = comfy + api_main

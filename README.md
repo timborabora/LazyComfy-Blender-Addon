@@ -6,12 +6,12 @@ The add-on only does what Blender knows – objects, masks, camera, passes. All 
 
 ## Install
 
-Download `lazy_comfy-<version>.zip` from the [latest release](https://github.com/timborabora/lazy_comfy/releases/latest) (not "Code › Download ZIP") and drop it onto Blender, or use Preferences › Get Extensions › Install from Disk.
+Download `lazy_comfy-<version>.zip` from the [latest release](https://github.com/timborabora/LazyComfy-Blender-Addon/releases/latest) (not "Code › Download ZIP") and drop it onto Blender, or use Preferences › Get Extensions › Install from Disk.
 
 For automatic updates add the repository once: Preferences › Get Extensions › Repositories › **+** › Add Remote Repository:
 
 ```
-https://github.com/timborabora/lazy_comfy/releases/latest/download/index.json
+https://github.com/timborabora/LazyComfy-Blender-Addon/releases/latest/download/index.json
 ```
 
 Tick "Check for Updates on Startup". Blender then offers new versions by itself.
@@ -58,7 +58,19 @@ Every node has a built-in placeholder (a blockout room), so a workflow also runs
 
 **Your own model:** put the model files into ComfyUI's models folder, build the workflow, add Blender Pass instead of Load Image, Blender Prompt into the text encoder, Blender Render Size into the latent size and a Blender Setting for every value you want as a slider, then save. The simplest start is an example copied with Save As.
 
-**Examples** are copied to *Workflows › Lazy Comfy* on the first connection and via Advanced › **Install Examples**: "SDXL · Canny + Depth", "SDXL · Depth + Objects + Inpaint" and "Qwen 2.1 · Depth (evaluation only)". They are laid out in groups: Blender Inputs → Model → Prompts → Control → Sampler → Inpaint → Output. If you changed an example, your version stays and a newer one is added next to it as "<name> (new).json". Copy an example with **Save As** before you change it.
+**Examples** are copied to *Workflows › Lazy Comfy* on the first connection and via Advanced › **Install Examples**:
+
+| Workflow | Use it for | Time* |
+|---|---|---|
+| SDXL · Line Art + Depth (Quick iterations) | fast look development; Blender line art and depth keep the layout exact | ~10 s |
+| SDXL · Depth + Objects + Inpaint (Per-object control & fixes) | object prompts per object, Redo Selection | ~8 s |
+| Qwen 2.1 · Depth (Best structure) | the closest match to the Blender depth pass | ~17 s |
+
+\* RTX 4080, 1024 × 1024, model already loaded; switching models adds loading time once.
+
+They are laid out in groups: Blender Inputs → Model → Prompts → Control → Sampler → Inpaint → Output. If you changed an example, your version stays and a newer one is added next to it as "<name> (new).json". Copy an example with **Save As** before you change it.
+
+**Menu label and tooltip for your own workflows:** add a Note node titled `Lazy Comfy`. Its first line is the purpose shown in brackets in the menu, the rest becomes the tooltip.
 
 Subgraphs must be unpacked before saving (right-click › Unpack Subgraph); the panel says so. Reroutes, primitive nodes, muted and bypassed nodes are supported.
 
@@ -85,11 +97,11 @@ Advanced › Model Packages installs curated model files plus a matching workflo
 - No free URL input. Custom nodes are never installed automatically, only reported.
 - A Hugging Face token for gated models belongs in the preferences, never in a .blend. The current packages need none.
 
-Licenses: Juggernaut XL and the xinsir ControlNets allow commercial use of images; Flux.1 [dev] is non-commercial; Qwen-Image 2.1 (qwen-research) is for evaluation only.
+Licenses (also listed in the catalog): Juggernaut XL and the xinsir ControlNets allow commercial use of images; Qwen-Image 2.1 is released under qwen-research.
 
 ## Older API-format workflows
 
-Workflows exported with Workflow › Export (API) still work when "Show API Files" is on in the preferences. They use node titles instead of Blender nodes:
+Workflows exported with Workflow › Export (API) still work: set a workflow folder in the preferences and turn on "Show API Files". They use node titles instead of Blender nodes (examples in `tests/fixtures/api_workflows`):
 
 | Title | Node | Effect |
 |---|---|---|

@@ -90,6 +90,29 @@ COMFY_PREFIX = "comfy:"
 BLENDER_SETTINGS = {"BlenderSettingFloat": "FLOAT", "BlenderSettingInt": "INT", "BlenderSettingBool": "BOOLEAN"}
 
 
+def display_info(ui, fallback_name):
+    """(menu label, tooltip) of a saved workflow.
+
+    Examples carry extra.lazy_comfy {title, purpose, description}. Own workflows can add a
+    Note node titled "Lazy Comfy": first line = purpose, the rest = tooltip.
+    """
+    extra = ui.get("extra") or {}
+    meta = extra.get("lazy_comfy") or extra.get("comfy_bridge") or {}
+    title = meta.get("title") or ""
+    purpose, tooltip = meta.get("purpose") or "", meta.get("description") or ""
+    if not purpose:
+        for node in ui.get("nodes", []):
+            if node.get("type") in ("Note", "MarkdownNote") and (node.get("title") or "").strip().lower() == "lazy comfy":
+                text = str((node.get("widgets_values") or [""])[0]).strip()
+                purpose, _, tooltip = text.partition("\n")
+                purpose, tooltip = purpose.strip(), tooltip.strip()
+                break
+    label = title or fallback_name
+    if purpose and f"({purpose})" not in label:
+        label = f"{label} ({purpose})"
+    return label, tooltip
+
+
 def has_blender_nodes(ui):
     return any(str(n.get("type", "")).startswith("Blender") for n in ui.get("nodes", []))
 

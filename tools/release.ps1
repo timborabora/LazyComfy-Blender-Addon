@@ -1,7 +1,7 @@
 # Builds the extension, generates the extension index and creates a GitHub release.
 #
 # Blender gets updates from this repository URL (add it once in Blender):
-#   https://github.com/timborabora/lazy_comfy/releases/latest/download/index.json
+#   https://github.com/timborabora/LazyComfy-Blender-Addon/releases/latest/download/index.json
 # Preferences > Get Extensions > Repositories > + > Add Remote Repository,
 # tick "Check for Updates on Startup".
 #

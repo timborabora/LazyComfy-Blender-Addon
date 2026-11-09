@@ -1,12 +1,12 @@
-schema_version = "1.0.0"
+schema_version = "1.1.0"
 
 id = "lazy_comfy"
-version = "1.0.0"
+version = "1.1.0"
 name = "Lazy Comfy"
 tagline = "ComfyUI for Blender"
 maintainer = "Tim Jagodka"
 type = "add-on"
-website = "https://github.com/timborabora/lazy_comfy"
+website = "https://github.com/timborabora/LazyComfy-Blender-Addon"
 
 tags = ["Render"]
 

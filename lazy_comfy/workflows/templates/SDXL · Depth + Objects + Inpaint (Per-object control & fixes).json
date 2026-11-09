@@ -1,5 +1,5 @@
 {
- "id": "SDXL \u00b7 Depth + Objects + Inpaint.json",
+ "id": "SDXL \u00b7 Depth + Objects + Inpaint (Per-object control & fixes).json",
  "revision": 0,
  "last_node_id": 60,
  "last_link_id": 48,
@@ -2128,7 +2128,9 @@
    ]
   },
   "lazy_comfy": {
-   "description": "Depth-guided SDXL with per-object prompts and Redo Selection (inpaint branch).",
+   "title": "SDXL \u00b7 Depth + Objects + Inpaint",
+   "purpose": "Per-object control & fixes",
+   "description": "Object prompts for materials per object, plus Redo Selection to repaint single objects. About 8 s per image on an RTX 4080 at 1024\u00b2 (model loaded).",
    "packages": [
     "sdxl_canny_depth"
    ],

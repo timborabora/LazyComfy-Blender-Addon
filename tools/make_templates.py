@@ -18,8 +18,8 @@ COL_W, ROW_GAP = 380, 40
 
 
 class Graph:
-    def __init__(self, name, packages, description):
-        self.name, self.packages, self.description = name, packages, description
+    def __init__(self, title, purpose, packages, description):
+        self.title, self.purpose, self.packages, self.description = title, purpose, packages, description
         self.nodes, self.links, self.order = {}, [], []
         self.next_link = 1
         self.col_y = {g: 60 for g in GROUPS}
@@ -87,7 +87,8 @@ class Graph:
         ui = {"id": filename, "revision": 0, "last_node_id": max(self.nodes), "last_link_id": self.next_link - 1,
               "nodes": nodes, "links": self.links, "groups": groups, "config": {},
               "extra": {"ds": {"scale": 0.6, "offset": [40, 40]},
-                        "lazy_comfy": {"description": self.description, "packages": self.packages,
+                        "lazy_comfy": {"title": self.title, "purpose": self.purpose, "description": self.description,
+                                       "packages": self.packages,
                                          "nodes": [c for c in used if c.startswith("Blender")] or [],
                                          "required_nodes": used}},
               "version": 0.4}
@@ -100,11 +101,11 @@ class Graph:
 NEG = "cartoon, illustration, drawing, painting, cgi, 3d render, plastic, anime, sketch, blurry"
 
 
-def sdxl_base(g, canny=True):
+def sdxl_base(g, lineart=True):
     g.add(1, "BlenderPrompt", "Blender Inputs", positive="RAW photo, modern living room, concrete walls, oak floor, "
           "large windows, soft daylight, photorealistic, 8k uhd, DSLR", negative=NEG)
-    if canny:
-        g.add(2, "BlenderPass", "Blender Inputs", title="Blender Pass · Beauty", pass_type="beauty")
+    if lineart:
+        g.add(2, "BlenderPass", "Blender Inputs", title="Blender Pass · Line Art", pass_type="lineart")
     g.add(3, "BlenderPass", "Blender Inputs", title="Blender Pass · Depth", pass_type="depth")
     g.add(4, "BlenderRenderSize", "Blender Inputs")
     g.add(10, "CheckpointLoaderSimple", "Model", ckpt_name="juggernautXL_ragnarokBy.safetensors")
@@ -113,13 +114,13 @@ def sdxl_base(g, canny=True):
     g.link(1, 0, 11, "text"); g.link(10, 1, 11, "clip")
     g.link(1, 1, 12, "text"); g.link(10, 1, 12, "clip")
     pos, neg = (11, 0), (12, 0)
-    if canny:
-        g.add(20, "Canny", "Control", low_threshold=0.2, high_threshold=0.6)
-        g.add(21, "ControlNetLoader", "Control", title="ControlNet Canny", control_net_name="controlnet-canny-sdxl.safetensors")
-        g.add(24, "BlenderSettingFloat", "Control", label="Canny Strength", value=0.7, minimum=0.0, maximum=1.5)
-        g.add(25, "BlenderSettingFloat", "Control", label="Canny End", value=0.8, minimum=0.0, maximum=1.0)
-        g.add(23, "ControlNetApplyAdvanced", "Control", title="Apply Canny")
-        g.link(2, 0, 20, "image"); g.link(20, 0, 23, "image"); g.link(21, 0, 23, "control_net")
+    if lineart:
+        # Blender's line art is an exact edge map (white on black) – it goes straight into the edge ControlNet
+        g.add(21, "ControlNetLoader", "Control", title="ControlNet Edges", control_net_name="controlnet-canny-sdxl.safetensors")
+        g.add(24, "BlenderSettingFloat", "Control", label="Line Art Strength", value=0.7, minimum=0.0, maximum=1.5)
+        g.add(25, "BlenderSettingFloat", "Control", label="Line Art End", value=0.8, minimum=0.0, maximum=1.0)
+        g.add(23, "ControlNetApplyAdvanced", "Control", title="Apply Line Art")
+        g.link(2, 0, 23, "image"); g.link(21, 0, 23, "control_net")
         g.link(24, 0, 23, "strength"); g.link(25, 0, 23, "end_percent")
         g.link(*pos, 23, "positive"); g.link(*neg, 23, "negative")
         pos, neg = (23, 0), (23, 1)
@@ -142,17 +143,30 @@ def sdxl_base(g, canny=True):
     g.link(3, 0, 42, "images")
 
 
-# 1) SDXL · Canny + Depth
-g = Graph("SDXL · Canny + Depth", ["sdxl_canny_depth"], "Juggernaut XL with Canny from the beauty pass and Blender depth.")
+# Measured on Tim's RTX 4080, 1024 x 1024, model already loaded (tests/template_run.py)
+TIMES = {"sdxl": "10 s", "objects": "8 s", "qwen": "17 s"}
+
+
+def timed(text, key):
+    return f"{text} About {TIMES[key]} per image on an RTX 4080 at 1024² (model loaded)." if TIMES[key] else text
+
+
+def file_name(g):
+    return f"{g.title} ({g.purpose}).json"
+
+
+# 1) SDXL · Line Art + Depth
+g = Graph("SDXL · Line Art + Depth", "Quick iterations", ["sdxl_canny_depth"],
+          timed("Fast look development: Blender line art and depth keep the layout exact.", "sdxl"))
 sdxl_base(g)
 g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/sdxl")
 g.link(40, 0, 41, "images")
-g.save("SDXL · Canny + Depth.json")
+g.save(file_name(g))
 
 # 2) SDXL · Depth + Objects + Inpaint
-g = Graph("SDXL · Depth + Objects + Inpaint", ["sdxl_canny_depth"],
-          "Depth-guided SDXL with per-object prompts and Redo Selection (inpaint branch).")
-sdxl_base(g, canny=False)
+g = Graph("SDXL · Depth + Objects + Inpaint", "Per-object control & fixes", ["sdxl_canny_depth"],
+          timed("Object prompts for materials per object, plus Redo Selection to repaint single objects.", "objects"))
+sdxl_base(g, lineart=False)
 g.add(13, "BlenderObjectPrompts", "Prompts")
 g.link(10, 1, 13, "clip"); g.link(11, 0, 13, "conditioning")
 # rewire: object prompts feed the depth control instead of the plain positive
@@ -184,11 +198,11 @@ g.add(60, "ComfySwitchNode", "Output", title="Redo Selection?")
 g.link(50, 2, 60, "switch"); g.link(57, 0, 60, "on_true"); g.link(40, 0, 60, "on_false")
 g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/sdxl_objects")
 g.link(60, 0, 41, "images")
-g.save("SDXL · Depth + Objects + Inpaint.json")
+g.save(file_name(g))
 
 # 3) Qwen 2.1 · Depth
-g = Graph("Qwen 2.1 · Depth (evaluation only)", ["qwen_image_21_depth"],
-          "Qwen-Image 2.1 with ControlNet Union on Blender depth. License qwen-research: evaluation only, no commercial use.")
+g = Graph("Qwen 2.1 · Depth", "Best structure", ["qwen_image_21_depth"],
+          timed("Qwen-Image 2.1 follows the Blender depth pass most closely – furniture stays exactly in place.", "qwen"))
 g.add(1, "BlenderPrompt", "Blender Inputs", positive="Photorealistic interior photograph of a modern living room. "
       "A grey fabric sofa stands against the back wall, a low oak coffee table in front of it, a tall shelf on the right. "
       "Raw concrete walls, warm oak floor, soft daylight, editorial architecture photography.", negative="")
@@ -218,4 +232,4 @@ g.add(41, "SaveImage", "Output", filename_prefix="lazy_comfy/qwen")
 g.link(40, 0, 41, "images")
 g.add(42, "PreviewImage", "Output", title="Control Preview · Depth")
 g.link(3, 0, 42, "images")
-g.save("Qwen 2.1 · Depth (evaluation only).json")
+g.save(file_name(g))
